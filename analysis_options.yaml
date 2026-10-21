@@ -1,0 +1,43 @@
+# This file configures the analyzer, which statically analyzes Dart code to
+# check for errors, warnings, and lints.
+#
+# The issues identified by the analyzer are surfaced in the UI of Dart-enabled
+# IDEs (https://dart.dev/tools#ides-and-editors). The analyzer can also be
+# invoked from the command line by running `flutter analyze`.
+
+include: package:flutter_lints/flutter.yaml
+
+linter:
+  # The lint rules applied to this project can be customized in the
+  # section below to disable rules from the `package:flutter_lints/flutter.yaml`
+  # included above or to enable additional rules. A list of all available
+  # lint rules and their documentation can be found at
+  # https://dart-lang.github.io/linter/lints/index.html.
+  #
+  # Instead of disabling a lint rule for the entire project in the section
+  # below, it can also be suppressed for a single line by using the
+  # `// ignore_for_file: name_of_lint` syntax
+  rules:
+    prefer_const_constructors: false
+    prefer_const_literals_to_create_immutables: false
+    avoid_print: true
+    no_leading_underscores_for_local_identifiers: false
+
+analyzer:
+  exclude:
+    - "**/*.g.dart"
+    - "**/*.freezed.dart"
+    - build/**
+    - android/**
+    - ios/**
+    - web/**
+    - windows/**
+    - macos/**
+    - linux/**
+  errors:
+    # Uncomment this line if you want to suppress deprecated member use warnings
+    # deprecated_member_use: ignore
+    # Treat missing required parameters as errors
+    missing_required_param: error
+    # Treat returns as errors if return type doesn't match
+    return_of_invalid_type: error
