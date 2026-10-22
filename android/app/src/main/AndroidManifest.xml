@@ -17,6 +17,7 @@
 
     <!-- Ring-time Spotify handoff -->
     <queries>
+        <package android:name="com.spotify.music" />
         <intent>
             <action android:name="android.intent.action.VIEW" />
             <data android:scheme="spotify" />
@@ -36,10 +37,24 @@
         <!-- alarm plugin: notification-on-kill support -->
         <service android:name="com.gdelataillade.alarm.services.NotificationOnKillService" />
 
+        <!-- Media-session bridge: lets Bangun press play in Spotify at ring
+             time. The user enables notification access once. -->
+        <service
+            android:name=".MediaControlListenerService"
+            android:label="Bangun media control"
+            android:exported="true"
+            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
+            <intent-filter>
+                <action android:name="android.service.notification.NotificationListenerService" />
+            </intent-filter>
+        </service>
+
         <activity
             android:name=".MainActivity"
             android:exported="true"
             android:launchMode="singleTop"
+            android:showWhenLocked="true"
+            android:turnScreenOn="true"
             android:theme="@style/LaunchTheme"
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
             android:hardwareAccelerated="true"

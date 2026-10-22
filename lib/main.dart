@@ -119,6 +119,12 @@ class _BangunAppState extends State<BangunApp> with WidgetsBindingObserver {
       theme: bangunTheme(),
       navigatorKey: _navKey,
       navigatorObservers: [_ringTracker],
+      // The layout is tuned for phones with default text size; clamp extreme
+      // accessibility scales so every card still fits the screen.
+      builder: (context, child) => MediaQuery.withClampedTextScaling(
+        maxScaleFactor: 1.12,
+        child: child ?? const SizedBox.shrink(),
+      ),
       home: const HomeScreen(),
     );
   }

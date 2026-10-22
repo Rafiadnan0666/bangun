@@ -42,6 +42,21 @@ void main() {
       );
     });
 
+    test('forPlay appends the autoplay :play switch', () {
+      expect(
+        spotifyDeepLink(
+          'https://open.spotify.com/playlist/37i9dQZF1E35NbjQoPZcmv?si=abc123',
+          forPlay: true,
+        ),
+        'spotify:playlist:37i9dQZF1E35NbjQoPZcmv:play',
+      );
+      expect(
+        spotifyDeepLink('open.spotify.com/track/4NrXzqzG8B0Bgb2ZnKGIcd',
+            forPlay: true),
+        'spotify:track:4NrXzqzG8B0Bgb2ZnKGIcd:play',
+      );
+    });
+
     test('non-item links return null', () {
       expect(spotifyDeepLink('https://example.com/playlist/short'), isNull);
       expect(spotifyDeepLink('https://example.com'), isNull);

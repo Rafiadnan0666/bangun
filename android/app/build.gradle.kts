@@ -6,7 +6,9 @@ plugins {
 
 android {
     namespace = "com.example.bangun"
-    compileSdk = flutter.compileSdkVersion
+    // flutter_plugin_android_lifecycle 2.0.30+ (pulled in by file_picker)
+    // demands compileSdk >= 36; pin explicitly instead of flutter's preset.
+    compileSdk = 36
     ndkVersion = flutter.ndkVersion
 
     compileOptions {

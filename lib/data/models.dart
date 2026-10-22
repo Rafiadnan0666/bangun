@@ -172,7 +172,10 @@ Set<String> acceptedScanLabelSet(Iterable<String> targets) => {
 /// `https://` scheme, `?si=…` tracking params, and `/intl-xx` locale hops.
 /// `spotify:` URIs pass through untouched; links that don't resolve to an
 /// item return null (the caller then tries the raw URL).
-String? spotifyDeepLink(String url) {
+///
+/// Set [forPlay] to append Spotify's autoplay switch (`…:play`, verified by
+/// the community as the supported "open and start playing" deep link).
+String? spotifyDeepLink(String url, {bool forPlay = false}) {
   final trimmed = url.trim();
   if (trimmed.isEmpty) return null;
   if (trimmed.toLowerCase().startsWith('spotify:')) return trimmed;
@@ -184,7 +187,8 @@ String? spotifyDeepLink(String url) {
     final kind = segments[i].toLowerCase();
     final id = segments[i + 1];
     if (kinds.contains(kind) && id.length >= 10) {
-      return 'spotify:$kind:$id';
+      final suffix = forPlay ? ':play' : '';
+      return 'spotify:$kind:$id$suffix';
     }
   }
   return null;

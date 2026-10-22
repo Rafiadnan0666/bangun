@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart' hide RepeatMode;
+import 'package:permission_handler/permission_handler.dart';
 import 'package:provider/provider.dart';
 
 import '../core/format.dart';
 import '../core/palette.dart';
 import '../core/widgets.dart';
 import '../data/alarm_repository.dart';
+import '../data/media_control.dart';
 import '../data/models.dart';
 import 'editor_screen.dart';
 import 'math_challenge_screen.dart';
@@ -60,6 +62,7 @@ class _HomeScreenState extends State<HomeScreen> {
             _HeroNextAlarm(alarm: nextAlarm, nextAt: nextAt),
             const SizedBox(height: 14),
             _StatusCard(alarm: nextAlarm, nextAt: nextAt, stats: stats),
+            const _ReliabilityCard(),
             const SizedBox(height: 16),
             _QuickTiles(
               onNewAlarm: _openEditor,
@@ -143,25 +146,28 @@ class _Header extends StatelessWidget {
           child: const Text('👋', style: TextStyle(fontSize: 22)),
         ),
         const SizedBox(width: 12),
-        const Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Bangun.',
-              style: TextStyle(
-                fontSize: 27,
-                fontWeight: FontWeight.w900,
-                color: Bg.ink,
-                height: 1.05,
+        const Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Bangun.',
+                style: TextStyle(
+                  fontSize: 27,
+                  fontWeight: FontWeight.w900,
+                  color: Bg.ink,
+                  height: 1.05,
+                ),
               ),
-            ),
-            Text(
-              'wake smart · stop by scan or math',
-              style: TextStyle(fontSize: 12, color: Bg.sub),
-            ),
-          ],
+              Text(
+                'wake smart · stop by scan or math',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(fontSize: 12, color: Bg.sub),
+              ),
+            ],
+          ),
         ),
-        const Spacer(),
         if (streak > 0)
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -200,7 +206,7 @@ class _HeroNextAlarm extends StatelessWidget {
         borderRadius: BorderRadius.circular(30),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFFFF5E9C).withValues(alpha: 0.30),
+            color: Bg.ctaA.withValues(alpha: 0.30),
             blurRadius: 26,
             offset: const Offset(0, 14),
           ),
@@ -321,6 +327,164 @@ class _StatusCard extends StatelessWidget {
           ],
         ],
       ),
+    );
+  }
+}
+
+/// Shows a compact setup checklist only when Android would refuse to pop the
+/// ring screen: notifications off, or full-screen intents disallowed (Android
+/// 14+). Both are one-tap fixes and are re-checked on app resume.
+class _ReliabilityCard extends StatefulWidget {
+  const _ReliabilityCard();
+
+  @override
+  State<_ReliabilityCard> createState() => _ReliabilityCardState();
+}
+
+class _ReliabilityCardState extends State<_ReliabilityCard>
+    with WidgetsBindingObserver {
+  bool _notifications = true;
+  bool _fullScreen = true;
+  bool _spotifyAccess = true;
+  bool _loaded = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _refresh();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) _refresh();
+  }
+
+  Future<void> _refresh() async {
+    final notifications = await Permission.notification.isGranted;
+    final fullScreen = await MediaControl.canUseFullScreenIntent();
+    final access = await MediaControl.hasNotificationAccess();
+    if (!mounted) return;
+    setState(() {
+      _notifications = notifications;
+      _fullScreen = fullScreen;
+      _spotifyAccess = access;
+      _loaded = true;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final hasSpotify = context
+        .watch<AlarmRepository>()
+        .alarms
+        .any((a) => a.toneKind == ToneKind.spotify);
+    final broken =
+        !_notifications || !_fullScreen || (hasSpotify && !_spotifyAccess);
+    if (!_loaded || !broken) {
+      return const SizedBox.shrink();
+    }
+    return Padding(
+      padding: const EdgeInsets.only(top: 14),
+      child: BgCard(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Row(
+              children: [
+                Icon(Icons.notifications_active_rounded,
+                    size: 18, color: Bg.ctaA),
+                SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Alarm reliability',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w800,
+                      fontSize: 14.5,
+                      color: Bg.ink,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            if (!_notifications) ...[
+              const SizedBox(height: 6),
+              _line(
+                'Notifications are off — Android will not show or launch the '
+                'alarm screen. Allow them and the ring pops up by itself.',
+                'Allow notifications',
+                () async {
+                  await Permission.notification.request();
+                  await _refresh();
+                },
+              ),
+            ],
+            if (!_fullScreen) ...[
+              const SizedBox(height: 6),
+              _line(
+                'Full-screen alarms are off — the ring screen will not cover '
+                'the lock screen at alarm time. Allow full-screen '
+                'notifications for Bangun.',
+                'Allow full-screen',
+                () async {
+                  await MediaControl.openFullScreenIntentSettings();
+                  await Future<void>.delayed(const Duration(seconds: 1));
+                  await _refresh();
+                },
+              ),
+            ],
+            if (hasSpotify && !_spotifyAccess) ...[
+              const SizedBox(height: 6),
+              _line(
+                'Your Spotify alarm needs notification access before Bangun '
+                'can press play by itself. Without it Spotify opens paused '
+                'and you only hear the backup chime.',
+                'Allow Spotify auto-play',
+                () async {
+                  await MediaControl.openNotificationAccessSettings();
+                  await Future<void>.delayed(const Duration(seconds: 1));
+                  await _refresh();
+                },
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _line(String body, String action, VoidCallback onTap) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(body, style: const TextStyle(fontSize: 11.5, color: Bg.sub)),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: TextButton(
+            style: TextButton.styleFrom(
+              foregroundColor: Bg.ctaA,
+              padding: EdgeInsets.zero,
+              minimumSize: const Size(0, 32),
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
+            onPressed: onTap,
+            child: Text(
+              action,
+              style: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w800,
+                decoration: TextDecoration.underline,
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

@@ -236,7 +236,10 @@ class AlarmRepository extends ChangeNotifier {
     final asset = switch (a.toneKind) {
       ToneKind.builtin => a.tone.assetPath,
       ToneKind.file => a.filePath!,
-      ToneKind.spotify => BuiltInTone.sirenRush.assetPath,
+      // Spotify alarms must never blast the siren: Bangun opens Spotify and
+      // presses play, while a gentle twin chime keeps the ring alive until
+      // the gate is cleared (or if Spotify is unavailable).
+      ToneKind.spotify => BuiltInTone.twinChime.assetPath,
     };
     return AlarmSettings(
       id: a.id,

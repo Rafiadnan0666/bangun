@@ -1,30 +1,48 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-/// Bangun design tokens — pastel cards on a lavender canvas with a
-/// chunky, rounded type look (mirrors the reference dashboard style).
+/// Bangun design tokens — a strict blue-and-white system: white surfaces on
+/// a pale blue canvas, blue family for every accent, chunky rounded type.
+/// Red only marks destructive actions and green marks wins; everything else
+/// is blue, so the brand reads instantly.
 abstract final class Bg {
   // Canvas & surfaces.
-  static const bg = Color(0xFFF5F2FB);
+  static const bg = Color(0xFFEDF4FE);
   static const card = Colors.white;
-  static const cardSoft = Color(0xFFEDE7FA);
-  static const hairline = Color(0xFFE7E1F5);
+  static const cardSoft = Color(0xFFDCEBFF);
+  static const hairline = Color(0xFFC9DEFA);
 
   // Ink.
-  static const ink = Color(0xFF241D33);
-  static const sub = Color(0xFF8B85A4);
-  static const subFaint = Color(0xFFB3ADCB);
+  static const ink = Color(0xFF0B2A55);
+  static const sub = Color(0xFF4F6E9E);
+  static const subFaint = Color(0xFF8FA9CE);
 
-  // Pastel tile palette.
-  static const coral = Color(0xFFFF6E5A);
-  static const peach = Color(0xFFFFB05E);
-  static const lemon = Color(0xFFFDCE5A);
-  static const mint = Color(0xFF7EDCA7);
-  static const sky = Color(0xFF86C8FF);
-  static const lilac = Color(0xFFB6A5FF);
-  static const rose = Color(0xFFFFA9C7);
-  static const olive = Color(0xFFA8C972);
-  static const plum = Color(0xFF9C6ADE);
+  // Accent family — every hue a blue, from deep navy to airy sky.
+  static const coral = Color(0xFF1D74E0);
+  static const peach = Color(0xFF5B9DF4);
+  static const lemon = Color(0xFFA9CFFA);
+  static const mint = Color(0xFF3E97F5);
+  static const sky = Color(0xFF6EB1FA);
+  static const lilac = Color(0xFF0B57C2);
+  static const rose = Color(0xFF2E6FD8);
+  static const olive = Color(0xFF7FB4F2);
+  static const plum = Color(0xFF084A9E);
+
+  // CTA gradient (deep blue -> bright blue).
+  static const ctaA = Color(0xFF0F5FC7);
+  static const ctaB = Color(0xFF4FA5FF);
+  static const cta = LinearGradient(
+    colors: [ctaA, ctaB],
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+  );
+
+  // Ring screen gradient — a blue sunrise instead of the old peach-pink.
+  static const ring = LinearGradient(
+    colors: [Color(0xFF0B57C2), Color(0xFF3E97F5), Color(0xFF8CC9F8)],
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+  );
 
   // Sound-card blue & white system (tone section only).
   static const toneBlue = Color(0xFF1D74E0);
@@ -36,23 +54,7 @@ abstract final class Bg {
     end: Alignment.bottomRight,
   );
 
-  // CTA gradient (orange -> pink, like the reference "Send again").
-  static const ctaA = Color(0xFFFF8A3C);
-  static const ctaB = Color(0xFFFF5E9C);
-  static const cta = LinearGradient(
-    colors: [ctaA, ctaB],
-    begin: Alignment.topLeft,
-    end: Alignment.bottomRight,
-  );
-
-  // Ring screen gradient (peach -> pink -> lilac, "sunrise" energy).
-  static const ring = LinearGradient(
-    colors: [Color(0xFFFFB463), Color(0xFFFF7A9E), Color(0xFFB79DFC)],
-    begin: Alignment.topLeft,
-    end: Alignment.bottomRight,
-  );
-
-  // Signals.
+  // Signals (kept functional — they are the only non-blue accents).
   static const success = Color(0xFF2FBE7B);
   static const danger = Color(0xFFFF5A6A);
 
@@ -68,17 +70,35 @@ abstract final class Bg {
   ];
 }
 
+/// Headline text rendered with the brand gradient via a shader mask.
+class GradientText extends StatelessWidget {
+  const GradientText({super.key, required this.text, required this.style});
+
+  final String text;
+  final TextStyle style;
+
+  @override
+  Widget build(BuildContext context) {
+    return ShaderMask(
+      blendMode: BlendMode.srcIn,
+      shaderCallback: (bounds) => Bg.cta.createShader(
+        Rect.fromLTWH(0, 0, bounds.width, bounds.height),
+      ),
+      child: Text(text, style: style),
+    );
+  }
+}
+
 ThemeData bangunTheme() {
-  final scheme =
-      ColorScheme.fromSeed(
-        seedColor: Bg.ctaB,
-        brightness: Brightness.light,
-      ).copyWith(
-        primary: Bg.ctaB,
-        secondary: Bg.lilac,
-        surface: Bg.card,
-        error: Bg.danger,
-      );
+  final scheme = ColorScheme.fromSeed(
+    seedColor: Bg.ctaA,
+    brightness: Brightness.light,
+  ).copyWith(
+    primary: Bg.ctaA,
+    secondary: Bg.sky,
+    surface: Bg.card,
+    error: Bg.danger,
+  );
   return ThemeData(
     useMaterial3: true,
     colorScheme: scheme,
@@ -127,29 +147,6 @@ ThemeData bangunTheme() {
     ),
     dividerTheme: const DividerThemeData(
       color: Bg.hairline,
-      thickness: 1,
-      space: 1,
     ),
   );
-}
-
-/// Gradient text for display headings (e.g. the alarm time).
-class GradientText extends StatelessWidget {
-  const GradientText({super.key, required this.text, required this.style});
-
-  final String text;
-  final TextStyle style;
-
-  @override
-  Widget build(BuildContext context) {
-    return ShaderMask(
-      blendMode: BlendMode.srcIn,
-      shaderCallback: (bounds) => const LinearGradient(
-        colors: [Color(0xFFFF8A3C), Color(0xFFFF5E9C)],
-        begin: Alignment.centerLeft,
-        end: Alignment.centerRight,
-      ).createShader(Rect.fromLTWH(0, 0, bounds.width, bounds.height)),
-      child: Text(text, style: style),
-    );
-  }
 }

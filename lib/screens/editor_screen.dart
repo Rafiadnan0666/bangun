@@ -1,17 +1,20 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:math' as math;
 
-import 'package:file_selector/file_selector.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart' hide RepeatMode;
 import 'package:flutter/services.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../core/format.dart';
 import '../core/palette.dart';
 import '../core/widgets.dart';
 import '../data/alarm_repository.dart';
+import '../data/media_control.dart';
 import '../data/models.dart';
+import '../data/spotify_launch.dart';
 import '../data/tone_preview.dart';
 
 /// Create / edit an alarm. All challenge + tone configuration lives here —
@@ -111,15 +114,25 @@ class _EditorScreenState extends State<EditorScreen> {
 
   Future<void> _pickFile() async {
     try {
-      const group = XTypeGroup(
-        label: 'Audio',
-        extensions: ['mp3', 'wav', 'm4a', 'ogg', 'flac', 'aac', 'opus'],
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.audio,
+        withData: true,
       );
-      final file = await openFile(acceptedTypeGroups: [group]);
-      if (file == null) return;
+      final picked = result?.files.firstOrNull;
+      if (picked == null) return;
+      // Copy into the app's documents directory: system cache copies get
+      // evicted and SAF read grants expire, which is exactly how a "custom
+      // file" alarm ends up silent (or default-toned) after a while.
+      final ext = (picked.extension ?? 'audio').toLowerCase();
+      final docs = await getApplicationDocumentsDirectory();
+      final durable = File(
+        '${docs.path}/tone_${DateTime.now().millisecondsSinceEpoch}.$ext',
+      );
+      final bytes = picked.bytes ?? await File(picked.path!).readAsBytes();
+      await durable.writeAsBytes(bytes);
       setState(() {
-        _filePath = file.path;
-        _fileLabel = file.name;
+        _filePath = durable.path;
+        _fileLabel = picked.name;
         _toneKind = ToneKind.file;
       });
     } on Exception catch (e) {
@@ -138,6 +151,55 @@ class _EditorScreenState extends State<EditorScreen> {
       return false;
     }
     return true;
+  }
+
+  /// Asks for the one Android permission that lets Bangun press play inside
+  /// Spotify. Returns true only when access is already granted, so callers
+  /// simply stop when the user goes to Settings to flip it.
+  Future<bool> _promptSpotifyAccess() async {
+    if (await MediaControl.hasNotificationAccess()) return true;
+    if (!mounted) return false;
+    final openSettings = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: Bg.card,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(26)),
+        title: const Text(
+          'Let Bangun start Spotify',
+          style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18),
+        ),
+        content: const Text(
+          'Android only lets Bangun press play inside Spotify when '
+          'notification access is on. It is a one-time switch, used only for '
+          'your alarm link.\n\nWithout it Spotify opens paused, so you only '
+          'hear the backup chime.',
+          style: TextStyle(color: Bg.sub, fontSize: 13.5, height: 1.45),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Not now', style: TextStyle(color: Bg.sub)),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: Bg.ctaA),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Open settings'),
+          ),
+        ],
+      ),
+    );
+    if (openSettings == true) {
+      await MediaControl.openNotificationAccessSettings();
+    }
+    return false;
+  }
+
+  Future<void> _selectSpotify() async {
+    setState(() {
+      _toneKind = ToneKind.spotify;
+      _spotifyUrl ??= '';
+    });
+    await _promptSpotifyAccess();
   }
 
   Future<void> _save() async {
@@ -179,13 +241,15 @@ class _EditorScreenState extends State<EditorScreen> {
   }
 
   /// Plays the sound exactly as the alarm engine will at ring time: the
-  /// chosen built-in tone, the picked file, or the Spotify path's fallback
-  /// siren. Second tap stops the preview.
+  /// chosen built-in tone, the picked file, or the Spotify start sequence
+  /// (open the item + press play through the media-session bridge). Second
+  /// tap stops a local preview.
   Future<void> _testSound() async {
     if (TonePreview.playing.value) {
       await TonePreview.stop();
       return;
     }
+    if (_toneKind == ToneKind.spotify && !await _promptSpotifyAccess()) return;
     final alarm = BangunAlarm(
       id: widget.existing?.id ?? 0,
       label: _labelCtrl.text.trim().isEmpty
@@ -206,8 +270,21 @@ class _EditorScreenState extends State<EditorScreen> {
       volume: _volume,
       createdAt: widget.existing?.createdAt ?? DateTime.now(),
     );
-    await TonePreview.test(alarm);
-    if (mounted) setState(() {});
+    final result = await TonePreview.test(alarm);
+    if (!mounted) return;
+    setState(() {});
+    if (result == null) return;
+    final message = switch (result) {
+      SpotifyStart.playing => 'Spotify is playing your link now.',
+      SpotifyStart.opened =>
+        'Spotify opened, but it needs notification access before Bangun '
+            'can press play by itself. Enable it below.',
+      SpotifyStart.unavailable =>
+        'Spotify is not installed on this device — no link can play here.',
+    };
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(message)));
   }
 
   Future<void> _delete() async {
@@ -314,10 +391,7 @@ class _EditorScreenState extends State<EditorScreen> {
                       _toneKind = ToneKind.builtin;
                     }),
                     onFile: _pickFile,
-                    onSpotifySelected: () => setState(() {
-                      _toneKind = ToneKind.spotify;
-                      _spotifyUrl ??= '';
-                    }),
+                    onSpotifySelected: _selectSpotify,
                     onChanged: () => setState(() {
                       _spotifyUrl = _spotifyCtrl.text;
                     }),
@@ -967,12 +1041,12 @@ class _SoundCard extends StatelessWidget {
                             ),
                           ),
                         ),
+                        const _SpotifyAccessCard(),
                         const SizedBox(height: 8),
                         Text(
-                          'At ring time Bangun auto-opens this link inside '
-                          'Spotify — playlist, song, or artist all work. The '
-                          'built-in siren keeps ringing underneath until the '
-                          'gate is cleared, so nothing depends on the cloud.',
+                          'At ring time Bangun opens your link and presses '
+                          'play in Spotify. The twin-chime backup rings '
+                          'underneath until the gate is cleared - no siren.',
                           style: TextStyle(
                             fontSize: 10.5,
                             color: Colors.white.withValues(alpha: .85),
@@ -988,32 +1062,25 @@ class _SoundCard extends StatelessWidget {
                               child: InkWell(
                                 borderRadius: BorderRadius.circular(12),
                                 onTap: () async {
-                                  try {
-                                    await launchUrl(
-                                      Uri.parse(url),
-                                      mode: LaunchMode.externalApplication,
-                                    );
-                                  } on Exception catch (e) {
-                                    debugPrint('open spotify failed: $e');
-                                  }
+                                  await launchSpotify(url, autoplay: true);
                                 },
                                 child: Padding(
-                                  padding: EdgeInsets.symmetric(vertical: 6),
+                                  padding: const EdgeInsets.symmetric(vertical: 6),
                                   child: Row(
                                     children: [
-                                      Text('🎧', style: TextStyle(fontSize: 14)),
-                                      SizedBox(width: 8),
-                                      Text(
-                                        'Open this link in Spotify — the '
-                                        'handoff test at ring time',
-                                        style: TextStyle(
-                                          fontSize: 11.5,
-                                          fontWeight: FontWeight.w800,
-                                          color: Colors.white,
-                                          decoration:
-                                              TextDecoration.underline,
-                                          decorationColor: Colors.white
-                                              .withValues(alpha: .7),
+                                      const Text('🎧', style: TextStyle(fontSize: 14)),
+                                      const SizedBox(width: 8),
+                                      const Expanded(
+                                        child: Text(
+                                          'Open this link in Spotify — the '
+                                          'handoff test at ring time',
+                                          style: TextStyle(
+                                            fontSize: 11.5,
+                                            fontWeight: FontWeight.w800,
+                                            color: Colors.white,
+                                            decoration:
+                                                TextDecoration.underline,
+                                          ),
                                         ),
                                       ),
                                     ],
@@ -1249,8 +1316,134 @@ class _SoundChip extends StatelessWidget {
   }
 }
 
+/// One-time setup row for Spotify mode: without notification access Bangun
+/// cannot press play inside Spotify, and the link would open paused. The card
+/// re-checks whenever the app resumes from the settings screen.
+class _SpotifyAccessCard extends StatefulWidget {
+  const _SpotifyAccessCard();
+
+  @override
+  State<_SpotifyAccessCard> createState() => _SpotifyAccessCardState();
+}
+
+class _SpotifyAccessCardState extends State<_SpotifyAccessCard>
+    with WidgetsBindingObserver {
+  bool? _hasAccess;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _refresh();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) _refresh();
+  }
+
+  Future<void> _refresh() async {
+    final access = await MediaControl.hasNotificationAccess();
+    if (mounted) setState(() => _hasAccess = access);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final access = _hasAccess;
+    if (access == null) return const SizedBox.shrink();
+    if (access) {
+      return Padding(
+        padding: const EdgeInsets.only(top: 8),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Icon(Icons.check_circle_rounded,
+                size: 15, color: Colors.white),
+            const SizedBox(width: 6),
+            Expanded(
+              child: Text(
+                'Auto-play armed — Bangun presses play in Spotify for you at '
+                'ring time.',
+                style: TextStyle(
+                  fontSize: 10.5,
+                  height: 1.35,
+                  color: Colors.white.withValues(alpha: .92),
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+    return Container(
+      margin: const EdgeInsets.only(top: 8),
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 6),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: .14),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.white.withValues(alpha: .35)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Icon(Icons.touch_app_rounded,
+                  size: 16, color: Colors.white),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Allow notification access once, and Bangun will press play '
+                  'inside Spotify by itself — no siren, no manual tap.',
+                  style: TextStyle(
+                    fontSize: 10.5,
+                    height: 1.35,
+                    color: Colors.white.withValues(alpha: .92),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton(
+              style: TextButton.styleFrom(
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 2),
+                minimumSize: const Size(0, 34),
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+              onPressed: () async {
+                await MediaControl.openNotificationAccessSettings();
+                // The user may come straight back; re-check on resume too.
+                await Future<void>.delayed(const Duration(seconds: 1));
+                await _refresh();
+              },
+              child: const Text(
+                'Enable auto-play',
+                style: TextStyle(
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w800,
+                  decoration: TextDecoration.underline,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 /// Blue-white "test what will wake me" pill. Reuses the shared preview so
-/// built-in tones, picked files, and the Spotify fallback all behave the
+/// built-in tones, picked files, and the Spotify start path all behave the
 /// same way; taps toggle play/stop and the pill pulses while audible.
 class _SoundTestButton extends StatefulWidget {
   const _SoundTestButton({
@@ -1281,9 +1474,7 @@ class _SoundTestButtonState extends State<_SoundTestButton>
             : widget.canPlay
                 ? 'Test my file'
                 : 'Pick a file first',
-        ToneKind.spotify => playing
-            ? 'Stop preview'
-            : 'Test fallback siren (used until Spotify opens)',
+        ToneKind.spotify => 'Open Spotify and play it',
       };
 
   @override

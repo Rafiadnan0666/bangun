@@ -1,5 +1,5 @@
 name: bangun
-description: "Bangun — alarms you stop with a scan or a math grind. On-device ML, paper in /research."
+description: "Bangun — alarms you stop with a scan or a math grind. All ML runs on-device."
 publish_to: 'none'
 version: 1.0.0+1
 
@@ -29,15 +29,17 @@ dependencies:
   # In-editor ring sound preview (tone / custom file / spotify fallback).
   audioplayers: ^6.5.0
 
+  path_provider: ^2.1.5
+
   # Custom-file ringtone picker.
-  file_selector: ^1.1.0
+  file_picker: ^10.3.7
 
   # UI look. 9.x returns `material_ui` types that this Flutter SDK's ThemeData
   # can't accept — stay on the 6.x line for the classic flutter/material types.
   google_fonts: ^6.2.1
 
   # Screen stays awake on the ring/challenge screens.
-  wakelock_plus: ^1.8.1
+  wakelock_plus: ^1.5.2
 
   # Notification / exact-alarm / camera permissions.
   # NOTE: 13.x pulls permission_handler_android >=14 which demands

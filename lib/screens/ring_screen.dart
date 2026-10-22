@@ -1,17 +1,19 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
-import 'package:url_launcher/url_launcher.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 
 import '../core/format.dart';
 import '../core/palette.dart';
 import '../core/widgets.dart';
 import '../data/alarm_repository.dart';
+import '../data/media_control.dart';
 import '../data/models.dart';
+import '../data/spotify_launch.dart';
 import 'math_challenge_screen.dart';
 import 'scan_challenge_screen.dart';
 
@@ -34,13 +36,17 @@ class RingScreen extends StatefulWidget {
 }
 
 class _RingScreenState extends State<RingScreen>
-    with SingleTickerProviderStateMixin {
+    with SingleTickerProviderStateMixin, WidgetsBindingObserver {
   late final AnimationController _spin;
   BangunAlarm? _alarm;
+  bool _spotifyAccess = true;
+  bool _spotifyPlaying = false;
+  Timer? _spotifyWatch;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _spin = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 9000),
@@ -48,9 +54,9 @@ class _RingScreenState extends State<RingScreen>
     WakelockPlus.enable();
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
     // Spotify handoff is automatic: once the ring UI is up and the alarm
-    // audio session is warm, open the configured link inside Spotify so
-    // the playlist/song/artist becomes the wake sound itself. The built-in
-    // siren keeps ringing underneath until the gate is cleared.
+    // audio session is warm, open the configured link inside Spotify and
+    // press play through the media-session bridge. The built-in twin-chime
+    // underlay keeps the ring audible until the gate is cleared.
     Future<void>.delayed(const Duration(milliseconds: 1400), () {
       if (mounted) _autoSpotifyHandoff();
     });
@@ -58,33 +64,77 @@ class _RingScreenState extends State<RingScreen>
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _spotifyWatch?.cancel();
     _spin.dispose();
     WakelockPlus.disable();
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     super.dispose();
   }
 
-  /// Opens the alarm's pasted link best-first: item deep link
-  /// (`spotify:playlist:…`), then the raw URL, then the bare app shell.
-  Future<void> _openSpotify() async {
-    final raw = _alarm?.spotifyUrl?.trim() ?? '';
-    if (raw.isEmpty) return;
-    final deep = spotifyDeepLink(raw);
-    final candidates = [
-      ?deep,
-      raw,
-      'spotify://',
-    ];
-    for (final candidate in candidates) {
-      final uri = Uri.tryParse(candidate);
-      if (uri == null) continue;
-      try {
-        final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
-        if (kDebugMode) debugPrint('SPOTIFY handoff: $candidate → $ok');
-        if (ok) return;
-      } on Exception {
-        // No handler for this variant — try the next candidate.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Coming back from the notification-access settings during a ring should
+    // reveal the freshly granted state without a rebuild trigger.
+    if (state == AppLifecycleState.resumed) _refreshSpotifyAccess();
+  }
+
+  Future<void> _refreshSpotifyAccess() async {
+    if (_alarm?.toneKind != ToneKind.spotify) return;
+    final access = await MediaControl.hasNotificationAccess();
+    if (mounted && access != _spotifyAccess) {
+      setState(() => _spotifyAccess = access);
+    }
+  }
+
+  /// Polls Spotify's real playback state so the gate can show whether the
+  /// music actually started underneath it.
+  void _startSpotifyWatch() {
+    _spotifyWatch ??= Timer.periodic(const Duration(seconds: 3), (_) async {
+      final playing = await MediaControl.spotifyIsPlaying();
+      if (!mounted) return;
+      if (playing != _spotifyPlaying) {
+        setState(() => _spotifyPlaying = playing);
       }
+      if (playing) {
+        _spotifyWatch?.cancel();
+        _spotifyWatch = null;
+      }
+    });
+  }
+
+  /// Opens the alarm's pasted link and makes Spotify actually start: the
+  /// `:play` deep link opens the item, then the media-session bridge presses
+  /// play. The twin-chime underlay keeps ringing until the gate is cleared.
+  Future<void> _openSpotify() async {
+    final alarm = _alarm;
+    if (alarm == null) return;
+    if (alarm.toneKind != ToneKind.spotify) return;
+    final url = alarm.spotifyUrl ?? '';
+    if (url.trim().isEmpty) return;
+    final deep = spotifyDeepLink(url.trim());
+    await _refreshSpotifyAccess();
+    final result = await startSpotify(
+      url,
+      onOpened: (_) {
+        // Spotify (or the browser) just took the foreground. Give it a moment
+        // to accept the deep link, then re-assert the gate on top with a
+        // full-screen intent while the music keeps playing underneath.
+        Future<void>.delayed(const Duration(milliseconds: 1300), () {
+          if (mounted) MediaControl.bringToFront();
+        });
+      },
+    );
+    if (!mounted) return;
+    if (kDebugMode) debugPrint('SPOTIFY ring: $result');
+    setState(() {
+      if (result == SpotifyStart.playing) _spotifyPlaying = true;
+    });
+    if (result == SpotifyStart.opened) {
+      // Spotify opened but has not accepted play yet (cold phone, session
+      // still booting). Keep nudging in the background.
+      unawaited(keepSpotifyPlaying(deepUri: deep));
+      _startSpotifyWatch();
     }
   }
 
@@ -94,6 +144,7 @@ class _RingScreenState extends State<RingScreen>
     if (_autoHandoffDone || !mounted) return;
     final alarm = _alarm ?? context.read<AlarmRepository>().byId(widget.alarmId);
     if (alarm == null || alarm.toneKind != ToneKind.spotify) return;
+    _alarm = alarm;
     final raw = alarm.spotifyUrl?.trim() ?? '';
     if (raw.isEmpty) return;
     _autoHandoffDone = true;
@@ -194,9 +245,14 @@ class _RingScreenState extends State<RingScreen>
               alignment: Alignment.bottomCenter,
               child: _LockSheet(
                 alarm: _alarm,
+                spotifyAccess: _spotifyAccess,
+                spotifyPlaying: _spotifyPlaying,
                 onMath: () => _startChallenge(ChallengeKind.math),
                 onScan: () => _startChallenge(ChallengeKind.scan),
                 onSpotify: _openSpotify,
+                onAllowSpotify: () async {
+                  await MediaControl.openNotificationAccessSettings();
+                },
               ),
             ),
           ],
@@ -209,15 +265,21 @@ class _RingScreenState extends State<RingScreen>
 class _LockSheet extends StatelessWidget {
   const _LockSheet({
     required this.alarm,
+    required this.spotifyAccess,
+    required this.spotifyPlaying,
     required this.onMath,
     required this.onScan,
     required this.onSpotify,
+    required this.onAllowSpotify,
   });
 
   final BangunAlarm? alarm;
+  final bool spotifyAccess;
+  final bool spotifyPlaying;
   final VoidCallback onMath;
   final VoidCallback onScan;
   final VoidCallback onSpotify;
+  final VoidCallback onAllowSpotify;
 
   @override
   Widget build(BuildContext context) {
@@ -305,20 +367,78 @@ class _LockSheet extends StatelessWidget {
             ],
             if (scanGate) InkPill(icon: '📷', label: 'Scan object', onTap: onScan),
             if (a.toneKind == ToneKind.spotify) ...[
-              const SizedBox(height: 10),
+              const SizedBox(height: 8),
               TextButton.icon(
                 onPressed: onSpotify,
-                icon: const Icon(Icons.music_note_rounded,
-                    color: Bg.ink, size: 18),
-                label: const Text(
-                  'Open your Spotify queue',
-                  style: TextStyle(
+                icon: Icon(
+                  spotifyPlaying
+                      ? Icons.graphic_eq_rounded
+                      : Icons.music_note_rounded,
+                  color: Bg.ink,
+                  size: 18,
+                ),
+                label: Text(
+                  spotifyPlaying
+                      ? 'Spotify is playing - tap to retry'
+                      : 'Start Spotify now',
+                  style: const TextStyle(
                     color: Bg.ink,
                     fontWeight: FontWeight.w700,
                     fontSize: 13,
                   ),
                 ),
               ),
+              if (!spotifyAccess)
+                Container(
+                  margin: const EdgeInsets.only(top: 2),
+                  padding: const EdgeInsets.fromLTRB(12, 8, 8, 8),
+                  decoration: BoxDecoration(
+                    color: Bg.cardSoft,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: Bg.hairline),
+                  ),
+                  child: Row(
+                    children: [
+                      const Expanded(
+                        child: Text(
+                          'Allow notification access so Bangun can press play '
+                          'in Spotify by itself.',
+                          style: TextStyle(
+                            fontSize: 10.5,
+                            height: 1.35,
+                            color: Bg.sub,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      TextButton(
+                        style: TextButton.styleFrom(
+                          foregroundColor: Bg.toneBlueDeep,
+                          padding: const EdgeInsets.symmetric(horizontal: 8),
+                          minimumSize: const Size(0, 30),
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
+                        onPressed: onAllowSpotify,
+                        child: const Text(
+                          'Allow',
+                          style: TextStyle(
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                )
+              else
+                Text(
+                  spotifyPlaying
+                      ? 'Music runs underneath the gate.'
+                      : 'The playlist starts by itself; this button retries '
+                          'the handoff.',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(fontSize: 10.5, color: Bg.subFaint),
+                ),
             ],
             const SizedBox(height: 6),
             const Text(

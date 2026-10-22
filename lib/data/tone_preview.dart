@@ -1,8 +1,11 @@
 /// In-editor sound preview.
 ///
-/// Lets the user hear exactly what will wake them — built-in tone, their own
-/// file, or (for Spotify links) the enforced fallback siren that keeps ringing
-/// until the Spotify handoff opens — straight from the sound card.
+/// Built-in tones and picked files play a five-second slice straight in the
+/// app at the exact volume floor the ring engine enforces. Spotify links do
+/// not play inside Bangun (Spotify owns that audio): the preview runs the
+/// same start sequence as ring time — open the item and press play via the
+/// media-session bridge — and reports the outcome so the editor can show an
+/// honest message instead of masking it with a siren demo.
 library;
 
 import 'dart:async';
@@ -12,6 +15,7 @@ import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/foundation.dart';
 
 import 'models.dart';
+import 'spotify_launch.dart';
 
 /// Reusable preview player; one instance keeps codec warm and cheap.
 final class TonePreview {
@@ -32,33 +36,42 @@ final class TonePreview {
     _player.onPlayerComplete.listen((_) => stop());
   }
 
-  /// Plays a ~[previewMs] slice of the alarm's configured ring sound.
-  static Future<void> test(BangunAlarm alarm) {
+  /// Plays the alarm's configured ring sound.
+  ///
+  /// Returns null for local playback (built-in tone / picked file), or the
+  /// Spotify start result when the alarm uses a Spotify link.
+  static Future<SpotifyStart?> test(BangunAlarm alarm) async {
     _init();
-    return _run(alarm);
+    if (alarm.toneKind == ToneKind.spotify) {
+      final result = await startSpotify(alarm.spotifyUrl ?? '');
+      if (kDebugMode) debugPrint('TONE preview: spotify → $result');
+      return result;
+    }
+    final path = switch (alarm.toneKind) {
+      ToneKind.builtin => alarm.tone.assetPath,
+      // Durable local copy made at pick time — survives cache eviction and
+      // expired SAF grants, so preview and ring behave the same forever.
+      ToneKind.file => alarm.filePath,
+      ToneKind.spotify => null,
+    };
+    if (path == null || path.isEmpty) {
+      if (kDebugMode) debugPrint('TONE preview: no source to play');
+      return null;
+    }
+    await _play(path, alarm.volume);
+    return null;
   }
 
-  static Future<void> _run(BangunAlarm alarm) async {
-    final src = switch (alarm.toneKind) {
-      ToneKind.builtin => AssetSource(
-          alarm.tone.assetPath.replaceFirst('assets/', ''),
-        ),
-      ToneKind.file =>
-        alarm.filePath == null ? null : DeviceFileSource(alarm.filePath!),
-      ToneKind.spotify => AssetSource(
-          BuiltInTone.sirenRush.assetPath.replaceFirst('assets/', ''),
-        ),
-    };
-    if (src == null) {
-      if (kDebugMode) debugPrint('TONE preview: no source to play');
-      return;
-    }
-    if (kDebugMode) debugPrint('TONE preview: ${alarm.toneKind} playing…');
+  static Future<void> _play(String path, double volume) async {
+    final src = path.startsWith('assets/')
+        ? AssetSource(path.replaceFirst('assets/', ''))
+        : DeviceFileSource(path);
+    if (kDebugMode) debugPrint('TONE preview: $path playing…');
     try {
       await _player.stop();
       await _player.setReleaseMode(ReleaseMode.stop);
       // Mirror the ring engine's enforced floor so the preview is honest.
-      await _player.setVolume(math.max(0.35, alarm.volume));
+      await _player.setVolume(math.max(0.35, volume));
       _cutoff?.cancel();
       _cutoff = Timer(const Duration(milliseconds: previewMs), stop);
       playing.value = true;
