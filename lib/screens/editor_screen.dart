@@ -146,8 +146,7 @@ class _EditorScreenState extends State<EditorScreen> {
       return false;
     }
     if (_toneKind == ToneKind.spotify &&
-        _spotifyUrl != null &&
-        _spotifyUrl!.trim().isEmpty) {
+        _spotifyCtrl.text.trim().isEmpty) {
       return false;
     }
     return true;
@@ -226,7 +225,11 @@ class _EditorScreenState extends State<EditorScreen> {
       tone: _tone,
       filePath: _filePath,
       fileLabel: _fileLabel,
-      spotifyUrl: _spotifyUrl?.trim(),
+      spotifyUrl: _toneKind == ToneKind.spotify
+          ? (_spotifyCtrl.text.trim().isEmpty
+                ? null
+                : _spotifyCtrl.text.trim())
+          : _spotifyUrl?.trim(),
       volume: _volume,
       createdAt: widget.existing?.createdAt ?? DateTime.now(),
     );
