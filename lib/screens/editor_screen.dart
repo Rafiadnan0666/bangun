@@ -1,13 +1,18 @@
+import 'dart:async';
+import 'dart:math' as math;
+
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart' hide RepeatMode;
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../core/format.dart';
 import '../core/palette.dart';
 import '../core/widgets.dart';
 import '../data/alarm_repository.dart';
 import '../data/models.dart';
+import '../data/tone_preview.dart';
 
 /// Create / edit an alarm. All challenge + tone configuration lives here —
 /// the ring screen itself has no configuration surface on purpose: it is a
@@ -67,6 +72,7 @@ class _EditorScreenState extends State<EditorScreen> {
 
   @override
   void dispose() {
+    unawaited(TonePreview.stop());
     _labelCtrl.dispose();
     _spotifyCtrl.dispose();
     super.dispose();
@@ -169,6 +175,39 @@ class _EditorScreenState extends State<EditorScreen> {
     }
     if (!mounted) return;
     Navigator.of(context).pop();
+    unawaited(TonePreview.stop());
+  }
+
+  /// Plays the sound exactly as the alarm engine will at ring time: the
+  /// chosen built-in tone, the picked file, or the Spotify path's fallback
+  /// siren. Second tap stops the preview.
+  Future<void> _testSound() async {
+    if (TonePreview.playing.value) {
+      await TonePreview.stop();
+      return;
+    }
+    final alarm = BangunAlarm(
+      id: widget.existing?.id ?? 0,
+      label: _labelCtrl.text.trim().isEmpty
+          ? 'Preview'
+          : _labelCtrl.text.trim(),
+      hour: _hour,
+      minute: _minute,
+      repeatMode: _repeatMode,
+      days: _days.toList()..sort(),
+      challengeKind: _kind,
+      mathProblems: _problems,
+      scanTargets: _targets.toList(),
+      toneKind: _toneKind,
+      tone: _tone,
+      filePath: _filePath,
+      fileLabel: _fileLabel,
+      spotifyUrl: _spotifyCtrl.text.trim(),
+      volume: _volume,
+      createdAt: widget.existing?.createdAt ?? DateTime.now(),
+    );
+    await TonePreview.test(alarm);
+    if (mounted) setState(() {});
   }
 
   Future<void> _delete() async {
@@ -267,6 +306,7 @@ class _EditorScreenState extends State<EditorScreen> {
                     toneKind: _toneKind,
                     tone: _tone,
                     fileLabel: _fileLabel,
+                    filePath: _filePath,
                     spotifyCtrl: _spotifyCtrl,
                     volume: _volume,
                     onTone: (t) => setState(() {
@@ -282,6 +322,7 @@ class _EditorScreenState extends State<EditorScreen> {
                       _spotifyUrl = _spotifyCtrl.text;
                     }),
                     onVolume: (v) => setState(() => _volume = v),
+                    onTest: _testSound,
                   ),
                   const SizedBox(height: 26),
                   CtaPill(
@@ -785,7 +826,9 @@ class _TargetPicker extends StatelessWidget {
           Text(
             selected.isEmpty
                 ? 'Pick at least one target!'
-                : 'Pick ${selected.length} — any of them will stop the alarm.',
+                : selected.every(kEasyScanTargets.contains)
+                ? 'Easy targets cover most scenes — hard ones optional.'
+                : 'Easy objects are asked first; hard ones only as fallback.',
             style: TextStyle(
               fontSize: 11,
               color: selected.isEmpty ? Bg.danger : Bg.subFaint,
@@ -802,6 +845,7 @@ class _SoundCard extends StatelessWidget {
     required this.toneKind,
     required this.tone,
     required this.fileLabel,
+    required this.filePath,
     required this.spotifyCtrl,
     required this.volume,
     required this.onTone,
@@ -809,11 +853,13 @@ class _SoundCard extends StatelessWidget {
     required this.onSpotifySelected,
     required this.onChanged,
     required this.onVolume,
+    required this.onTest,
   });
 
   final ToneKind toneKind;
   final BuiltInTone tone;
   final String? fileLabel;
+  final String? filePath;
   final TextEditingController spotifyCtrl;
   final double volume;
   final ValueChanged<BuiltInTone> onTone;
@@ -821,41 +867,62 @@ class _SoundCard extends StatelessWidget {
   final VoidCallback onSpotifySelected;
   final VoidCallback onChanged;
   final ValueChanged<double> onVolume;
+  final VoidCallback onTest;
 
   @override
   Widget build(BuildContext context) {
-    return BgCard(
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        gradient: Bg.toneGradient,
+        borderRadius: BorderRadius.circular(26),
+        boxShadow: [
+          BoxShadow(
+            color: Bg.toneBlueDeep.withValues(alpha: .28),
+            blurRadius: 20,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const SectionTitle('Ring sound', icon: '🔔'),
+          const _SoundTitle(),
           Wrap(
             spacing: 8,
             runSpacing: 8,
             children: [
               for (final t in BuiltInTone.values)
-                EmojiChip(
+                _SoundChip(
                   emoji: t.emoji,
                   label: t.title,
                   selected: toneKind == ToneKind.builtin && tone == t,
-                  color: Bg.lemon,
                   onTap: () => onTone(t),
                 ),
-              EmojiChip(
+              _SoundChip(
                 emoji: '📂',
                 label: fileLabel != null ? 'File: $fileLabel' : 'Own file',
                 selected: toneKind == ToneKind.file,
-                color: Bg.peach,
                 onTap: onFile,
               ),
-              EmojiChip(
+              _SoundChip(
                 emoji: '🎧',
                 label: 'Spotify',
                 selected: toneKind == ToneKind.spotify,
-                color: Bg.mint,
                 onTap: onSpotifySelected,
               ),
             ],
+          ),
+          const SizedBox(height: 10),
+          _SoundTestButton(
+            kind: toneKind,
+            canPlay: switch (toneKind) {
+              ToneKind.builtin => true,
+              ToneKind.file => filePath != null && filePath!.isNotEmpty,
+              ToneKind.spotify => true,
+            },
+            onToggle: onTest,
           ),
           if (toneKind == ToneKind.file && fileLabel != null)
             Padding(
@@ -863,7 +930,10 @@ class _SoundCard extends StatelessWidget {
               child: Text(
                 fileLabel!,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontSize: 11.5, color: Bg.sub),
+                style: TextStyle(
+                  fontSize: 11.5,
+                  color: Colors.white.withValues(alpha: .85),
+                ),
               ),
             ),
           AnimatedSize(
@@ -878,16 +948,80 @@ class _SoundCard extends StatelessWidget {
                         TextField(
                           controller: spotifyCtrl,
                           onChanged: (_) => onChanged(),
-                          decoration: const InputDecoration(
+                          style: const TextStyle(
+                            color: Bg.toneBlueDeep,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 14,
+                          ),
+                          decoration: InputDecoration(
+                            filled: true,
+                            fillColor: Colors.white,
                             hintText: 'Paste a Spotify track / playlist link',
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 14,
+                            ),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(16),
+                              borderSide: BorderSide.none,
+                            ),
                           ),
                         ),
                         const SizedBox(height: 8),
-                        const Text(
-                          'The siren tone keeps ringing until you open your '
-                          'Spotify queue — Bangun never relies on the cloud to '
-                          'louden the alarm.',
-                          style: TextStyle(fontSize: 10.5, color: Bg.subFaint),
+                        Text(
+                          'At ring time Bangun auto-opens this link inside '
+                          'Spotify — playlist, song, or artist all work. The '
+                          'built-in siren keeps ringing underneath until the '
+                          'gate is cleared, so nothing depends on the cloud.',
+                          style: TextStyle(
+                            fontSize: 10.5,
+                            color: Colors.white.withValues(alpha: .85),
+                          ),
+                        ),
+                        ValueListenableBuilder<TextEditingValue>(
+                          valueListenable: spotifyCtrl,
+                          builder: (context, value, _) {
+                            final url = value.text.trim();
+                            if (url.isEmpty) return const SizedBox.shrink();
+                            return Padding(
+                              padding: const EdgeInsets.only(top: 6),
+                              child: InkWell(
+                                borderRadius: BorderRadius.circular(12),
+                                onTap: () async {
+                                  try {
+                                    await launchUrl(
+                                      Uri.parse(url),
+                                      mode: LaunchMode.externalApplication,
+                                    );
+                                  } on Exception catch (e) {
+                                    debugPrint('open spotify failed: $e');
+                                  }
+                                },
+                                child: Padding(
+                                  padding: EdgeInsets.symmetric(vertical: 6),
+                                  child: Row(
+                                    children: [
+                                      Text('🎧', style: TextStyle(fontSize: 14)),
+                                      SizedBox(width: 8),
+                                      Text(
+                                        'Open this link in Spotify — the '
+                                        'handoff test at ring time',
+                                        style: TextStyle(
+                                          fontSize: 11.5,
+                                          fontWeight: FontWeight.w800,
+                                          color: Colors.white,
+                                          decoration:
+                                              TextDecoration.underline,
+                                          decorationColor: Colors.white
+                                              .withValues(alpha: .7),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            );
+                          },
                         ),
                       ],
                     ),
@@ -903,6 +1037,8 @@ class _SoundCard extends StatelessWidget {
                   value: volume,
                   min: 0.35,
                   max: 1,
+                  activeColor: Colors.white,
+                  inactiveColor: Colors.white.withValues(alpha: .30),
                   onChanged: onVolume,
                 ),
               ),
@@ -910,21 +1046,334 @@ class _SoundCard extends StatelessWidget {
               const SizedBox(width: 8),
               Text(
                 '${(volume * 100).round()}%',
-                style: const TextStyle(
+                style: TextStyle(
                   fontWeight: FontWeight.w800,
                   fontSize: 12.5,
-                  color: Bg.ink,
+                  color: Colors.white.withValues(alpha: .95),
                 ),
               ),
             ],
           ),
           const SizedBox(height: 2),
-          const Text(
+          Text(
             'Minimum enforced volume is 35% — a locked alarm is always audible.',
-            style: TextStyle(fontSize: 10.5, color: Bg.subFaint),
+            style: TextStyle(
+              fontSize: 10.5,
+              color: Colors.white.withValues(alpha: .70),
+            ),
           ),
         ],
       ),
+    );
+  }
+}
+
+/// Sound-card heading with a looping bell that rocks gently — the section
+/// that wakes you up should feel alive.
+class _SoundTitle extends StatelessWidget {
+  const _SoundTitle();
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10, left: 4),
+      child: Row(
+        children: [
+          const _WiggleBell(),
+          const SizedBox(width: 7),
+          const Text(
+            'Ring sound',
+            style: TextStyle(
+              fontWeight: FontWeight.w800,
+              fontSize: 14.5,
+              color: Colors.white,
+              letterSpacing: 0.2,
+            ),
+          ),
+          const Spacer(),
+          const _EqBars(),
+        ],
+      ),
+    );
+  }
+}
+
+class _WiggleBell extends StatefulWidget {
+  const _WiggleBell();
+
+  @override
+  State<_WiggleBell> createState() => _WiggleBellState();
+}
+
+class _WiggleBellState extends State<_WiggleBell>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _c = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 1400),
+  )..repeat();
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _c,
+      builder: (context, child) => Transform.rotate(
+        // One smooth swing per cycle keeps it fun without wobbling the text.
+        angle: math.sin(_c.value * 2 * math.pi) * 0.16,
+        child: child,
+      ),
+      child: const Text('🔔', style: TextStyle(fontSize: 15)),
+    );
+  }
+}
+
+/// Little dancing equalizer bars for the sound card header — white on blue,
+/// bounce faster while a preview is actually playing.
+class _EqBars extends StatefulWidget {
+  const _EqBars();
+
+  @override
+  State<_EqBars> createState() => _EqBarsState();
+}
+
+class _EqBarsState extends State<_EqBars> with SingleTickerProviderStateMixin {
+  late final AnimationController _c = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 900),
+  )..repeat();
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<bool>(
+      valueListenable: TonePreview.playing,
+      builder: (context, playing, _) {
+        return AnimatedBuilder(
+          animation: _c,
+          builder: (context, _) {
+            final speed = playing ? 1.9 : 1.0;
+            return Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                for (final i in [0, 1, 2, 3])
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 1.5),
+                    child: Container(
+                      width: 3.5,
+                      height: 7 +
+                          8 *
+                              (0.5 +
+                              0.5 *
+                                  math.sin((_c.value * 2 * math.pi + i * 1.7) *
+                                      speed)).abs(),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: .9),
+                        borderRadius: BorderRadius.circular(3),
+                      ),
+                    ),
+                  ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+}
+
+/// Blue-white tone chip for the sound card: idle = frosted white on blue,
+/// selected = solid white with deep-blue ink (plus the playful pop).
+class _SoundChip extends StatelessWidget {
+  const _SoundChip({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+    this.emoji,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+  final String? emoji;
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 240),
+      curve: Curves.easeOutBack,
+      decoration: BoxDecoration(
+        color: selected ? Colors.white : Colors.white.withValues(alpha: .14),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(
+          color: selected
+              ? Colors.transparent
+              : Colors.white.withValues(alpha: .45),
+          width: 1.4,
+        ),
+      ),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(999),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (emoji != null) ...[
+                Text(emoji!, style: const TextStyle(fontSize: 14)),
+                const SizedBox(width: 6),
+              ],
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w800,
+                  color: selected ? Bg.toneBlueDeep : Colors.white,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Blue-white "test what will wake me" pill. Reuses the shared preview so
+/// built-in tones, picked files, and the Spotify fallback all behave the
+/// same way; taps toggle play/stop and the pill pulses while audible.
+class _SoundTestButton extends StatefulWidget {
+  const _SoundTestButton({
+    required this.kind,
+    required this.canPlay,
+    required this.onToggle,
+  });
+
+  final ToneKind kind;
+  final bool canPlay;
+  final VoidCallback onToggle;
+
+  @override
+  State<_SoundTestButton> createState() => _SoundTestButtonState();
+}
+
+class _SoundTestButtonState extends State<_SoundTestButton>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _pulse = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 650),
+  );
+
+  String _label(bool playing) => switch (widget.kind) {
+        ToneKind.builtin => playing ? 'Stop preview' : 'Test this tone',
+        ToneKind.file => playing
+            ? 'Stop preview'
+            : widget.canPlay
+                ? 'Test my file'
+                : 'Pick a file first',
+        ToneKind.spotify => playing
+            ? 'Stop preview'
+            : 'Test fallback siren (used until Spotify opens)',
+      };
+
+  @override
+  void dispose() {
+    _pulse.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<bool>(
+      valueListenable: TonePreview.playing,
+      builder: (context, playing, _) {
+        if (playing) {
+          _pulse.repeat(reverse: true);
+        } else {
+          _pulse.stop();
+        }
+        return AnimatedBuilder(
+          animation: _pulse,
+          builder: (context, child) {
+            final active = widget.canPlay || playing;
+            return Transform.scale(
+              scale: playing ? 1 + _pulse.value * 0.05 : 1.0,
+              child: Opacity(
+                opacity: active ? 1 : 0.55,
+                child: Material(
+                  color: Colors.transparent,
+                  child: Ink(
+                    height: 44,
+                    decoration: BoxDecoration(
+                      color: playing ? Bg.toneBlueDeep : Colors.white,
+                      borderRadius: BorderRadius.circular(999),
+                      border: Border.all(
+                        color: playing
+                            ? Colors.white
+                            : Colors.white.withValues(alpha: .0),
+                        width: 1.8,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Bg.toneBlueDeep.withValues(alpha: .35),
+                          blurRadius: 10,
+                          offset: const Offset(0, 5),
+                        ),
+                      ],
+                    ),
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(999),
+                      onTap: widget.onToggle,
+                      child: Center(
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            playing
+                                ? Transform.scale(
+                                    scale: 1 + _pulse.value * 0.35,
+                                    child: const Icon(
+                                      Icons.stop_rounded,
+                                      size: 19,
+                                      color: Colors.white,
+                                    ),
+                                  )
+                                : const Icon(
+                                    Icons.play_arrow_rounded,
+                                    size: 19,
+                                    color: Bg.toneBlueDeep,
+                                  ),
+                            const SizedBox(width: 8),
+                            Text(
+                              _label(playing),
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w800,
+                                color: playing
+                                    ? Colors.white
+                                    : Bg.toneBlueDeep,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
     );
   }
 }

@@ -2,6 +2,8 @@
 /// ringtone sources, and wake statistics.
 library;
 
+import 'dart:math' as math;
+
 import 'package:collection/collection.dart';
 
 import '../core/format.dart';
@@ -88,6 +90,105 @@ const kPickableTargets = [
   'truck',
   'boat',
 ];
+
+/// Targets COCO-SSD reliably finds on a normal bedroom/desk at 3am —
+/// everyday objects a person will be forced to actually see up close.
+/// The gate picks these first; genuinely rare finds remain an optional
+/// fallback for alarms without any easy target.
+const kEasyScanTargets = {
+  'cup',
+  'bottle',
+  'book',
+  'cell phone',
+  'laptop',
+  'keyboard',
+  'mouse',
+  'remote',
+  'clock',
+  'potted plant',
+  'bowl',
+  'chair',
+  'couch',
+  'bed',
+  'dining table',
+  'tv',
+  'backpack',
+  'handbag',
+  'teddy bear',
+};
+
+/// Chooses the scan-gate target from an alarm's configured pool.
+///
+/// * Trial runs always ask for a cup (deterministic smoke-test/UX path).
+/// * Rings prioritize the easiest configured object; a hard-to-find object is
+///   only used when the pool has nothing easy on it.
+String pickScanTarget(List<String> pool, {bool isTrial = false}) {
+  if (pool.isEmpty) return 'cup';
+  if (isTrial) return pool.contains('cup') ? 'cup' : pool.first;
+  final easy = pool.where(kEasyScanTargets.contains).toList();
+  final source = easy.isNotEmpty ? easy : pool;
+  return source[math.Random().nextInt(source.length)];
+}
+
+/// Shape-confusable COCO classes.
+///
+/// The model's 90-label map is coarse — a wine glass is a cup with a stem,
+/// a laptop *contains* a keyboard, a backpack looks like a handbag from the
+/// side. When the gate asks for one thing it accepts these near-miss labels
+/// too, so the ring never fails over a taxonomy technicality.
+const kSimilarScanTargets = <String, List<String>>{
+  'cup': ['cup', 'wine glass', 'bottle'],
+  'wine glass': ['wine glass', 'cup', 'bottle'],
+  'bottle': ['bottle', 'cup', 'wine glass'],
+  'bowl': ['bowl', 'cup'],
+  'mouse': ['mouse', 'remote'],
+  'remote': ['remote', 'mouse', 'cell phone'],
+  'cell phone': ['cell phone', 'remote'],
+  'laptop': ['laptop', 'keyboard', 'tv'],
+  'keyboard': ['keyboard', 'laptop', 'tv'],
+  'tv': ['tv', 'laptop'],
+  'chair': ['chair', 'couch'],
+  'couch': ['couch', 'chair', 'bed'],
+  'bed': ['bed', 'couch'],
+  'backpack': ['backpack', 'handbag'],
+  'handbag': ['handbag', 'backpack'],
+  'potted plant': ['potted plant', 'vase'],
+  'vase': ['vase', 'potted plant'],
+};
+
+/// Every label that counts as a hit when the gate asks for [target].
+List<String> acceptedScanLabels(String target) =>
+    kSimilarScanTargets[target] ?? [target];
+
+/// Union of accepted labels across a whole configured target pool.
+Set<String> acceptedScanLabelSet(Iterable<String> targets) => {
+      for (final t in targets) ...acceptedScanLabels(t),
+    };
+
+/// Maps a pasted Spotify web link to the app's native URI scheme so the
+/// ring screen can hand off *inside* the Spotify app instead of a browser.
+///
+/// Accepts playlist / track / artist / album links with or without the
+/// `https://` scheme, `?si=…` tracking params, and `/intl-xx` locale hops.
+/// `spotify:` URIs pass through untouched; links that don't resolve to an
+/// item return null (the caller then tries the raw URL).
+String? spotifyDeepLink(String url) {
+  final trimmed = url.trim();
+  if (trimmed.isEmpty) return null;
+  if (trimmed.toLowerCase().startsWith('spotify:')) return trimmed;
+  final uri = Uri.tryParse(trimmed);
+  if (uri == null) return null;
+  const kinds = {'playlist', 'track', 'artist', 'album'};
+  final segments = uri.pathSegments;
+  for (var i = 0; i < segments.length - 1; i++) {
+    final kind = segments[i].toLowerCase();
+    final id = segments[i + 1];
+    if (kinds.contains(kind) && id.length >= 10) {
+      return 'spotify:$kind:$id';
+    }
+  }
+  return null;
+}
 
 class BangunAlarm {
   BangunAlarm({

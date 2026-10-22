@@ -107,7 +107,9 @@ class AlarmRepository extends ChangeNotifier {
             .map((e) => BangunAlarm.fromJson(Map<String, dynamic>.from(e)))
             .toList();
         _alarms = list;
-      } on FormatException {
+      } on Object {
+        // Corrupt or outdated payload — one bad entry must never kill boot
+        // (cast errors are Error, not Exception, so catch everything).
         _alarms = const [];
       }
     }

@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -47,6 +48,11 @@ class _MathChallengeScreenState extends State<MathChallengeScreen> {
       _total,
       (i) => MathEngine.generate(index: i, count: _total, exclude: used),
     );
+    if (kDebugMode) {
+      for (final (i, p) in _puzzles.indexed) {
+        debugPrint('MATH[$i]: ${p.prompt} = ${p.answer}');
+      }
+    }
   }
 
   void _press(String d) {

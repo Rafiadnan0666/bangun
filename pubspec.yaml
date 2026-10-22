@@ -26,6 +26,9 @@ dependencies:
   # Spotify handoff at ring time.
   url_launcher: ^6.3.3
 
+  # In-editor ring sound preview (tone / custom file / spotify fallback).
+  audioplayers: ^6.5.0
+
   # Custom-file ringtone picker.
   file_selector: ^1.1.0
 

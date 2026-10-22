@@ -7,6 +7,7 @@
 library;
 
 import 'dart:math' as math;
+import 'dart:ui';
 
 import 'package:camera/camera.dart';
 import 'package:flutter/foundation.dart';
@@ -20,11 +21,16 @@ class Detection {
     required this.classId,
     required this.label,
     required this.score,
+    this.box = Rect.zero,
   });
 
   final int classId;
   final String label;
   final double score;
+
+  /// Normalized [0..1] box on the square detector input, order (xMin, yMin,
+  /// xMax, yMax) — used by the scan gate's on-screen overlay.
+  final Rect box;
 
   @override
   String toString() => '$label ${(score * 100).round()}%';
@@ -133,7 +139,16 @@ class CocoDetector {
       final label = (classId >= 0 && classId < _labels.length)
           ? _labels[classId]
           : 'unknown';
-      found.add(Detection(classId: classId, label: label, score: score));
+      final b = _boxes[0][i];
+      // SSD emits [yMin, xMin, yMax, xMax] per row.
+      found.add(
+        Detection(
+          classId: classId,
+          label: label,
+          score: score,
+          box: Rect.fromLTRB(b[1], b[0], b[3], b[2]),
+        ),
+      );
     }
     found.sort((a, b) => b.score.compareTo(a.score));
     return found;

@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:camera/camera.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -12,6 +13,7 @@ import '../core/widgets.dart';
 import '../data/alarm_repository.dart';
 import '../data/coco_detector.dart';
 import '../data/models.dart';
+import '../data/scan_geometry.dart';
 import 'success_screen.dart';
 
 /// The scan gate: point the camera at the target object and hold it in frame.
@@ -44,8 +46,10 @@ class _ScanChallengeScreenState extends State<ScanChallengeScreen> {
   DateTime? _lastGateAt;
   bool _busy = false;
   bool _finishing = false;
+  int _frameW = 0;
+  int _frameH = 0;
 
-  late final List<String> _targets;
+  late final Set<String> _accepted;
   late final String _target;
 
   bool get _isTrial => widget.alarm.id == trialAlarmId;
@@ -56,8 +60,12 @@ class _ScanChallengeScreenState extends State<ScanChallengeScreen> {
     final pool = widget.alarm.scanTargets.isNotEmpty
         ? widget.alarm.scanTargets
         : const ['cup'];
-    _targets = pool;
-    _target = pool[math.Random().nextInt(pool.length)];
+    // Near-miss labels stay fair game — see [kSimilarScanTargets].
+    _accepted = acceptedScanLabelSet(pool);
+    _target = pickScanTarget(pool, isTrial: _isTrial);
+    if (kDebugMode) {
+      debugPrint('SCAN target: $_target (pool=$pool)');
+    }
     _bootstrap();
   }
 
@@ -116,6 +124,8 @@ class _ScanChallengeScreenState extends State<ScanChallengeScreen> {
       return;
     }
     try {
+      _frameW = image.width;
+      _frameH = image.height;
       final rgb = yuvToSquareRgb(
         image,
         sensorOrientation: _controller!.description.sensorOrientation,
@@ -125,7 +135,7 @@ class _ScanChallengeScreenState extends State<ScanChallengeScreen> {
       _detections = dets;
 
       final hit = dets
-          .where((d) => _targets.contains(d.label))
+          .where((d) => _accepted.contains(d.label))
           .fold<Detection?>(null, (best, d) => best ?? d);
 
       // Temporal gate delta — clamp so a background pause doesn't grant a
@@ -209,6 +219,21 @@ class _ScanChallengeScreenState extends State<ScanChallengeScreen> {
           fit: StackFit.expand,
           children: [
             preview,
+            if (_controller != null &&
+                _controller!.value.isInitialized &&
+                _detections.isNotEmpty &&
+                _frameW > 0)
+              Positioned.fill(
+                child: _DetectionBoxes(
+                  detections: _detections,
+                  accepted: _accepted,
+                  frameWidth: _frameW,
+                  frameHeight: _frameH,
+                  sensorOrientation:
+                      _controller!.description.sensorOrientation,
+                  squareSize: CocoDetector.I.inputSize,
+                ),
+              ),
             if (_permissionDenied)
               _MessageCard(
                 icon: '📷',
@@ -238,7 +263,7 @@ class _ScanChallengeScreenState extends State<ScanChallengeScreen> {
               progress: _progress,
               detections: _detections,
               matchedLabel: _matchedLabel,
-              targets: _targets,
+              accepted: _accepted,
               holdMs: _holdMs,
               isTrial: _isTrial,
             )],
@@ -260,7 +285,7 @@ class _ScanHud extends StatelessWidget {
     required this.progress,
     required this.detections,
     required this.matchedLabel,
-    required this.targets,
+    required this.accepted,
     required this.holdMs,
     required this.isTrial,
   });
@@ -269,7 +294,7 @@ class _ScanHud extends StatelessWidget {
   final double progress;
   final List<Detection> detections;
   final String? matchedLabel;
-  final List<String> targets;
+  final Set<String> accepted;
   final int holdMs;
   final bool isTrial;
 
@@ -312,6 +337,15 @@ class _ScanHud extends StatelessWidget {
                             color: Bg.ink,
                           ),
                         ),
+                        if (accepted.length > 1)
+                          Text(
+                            'also counts: '
+                            '${accepted.where((l) => l != target).join(', ')}',
+                            style: const TextStyle(
+                              fontSize: 10.5,
+                              color: Bg.sub,
+                            ),
+                          ),
                       ],
                     ),
                   ),
@@ -365,13 +399,25 @@ class _ScanHud extends StatelessWidget {
                   progress >= 1
                       ? 'got it!'
                       : matchedLabel == null
-                      ? 'Find and hold it in frame for ${holdMs / 1000}s'
-                      : 'Hold still… keep it centered',
+                      ? 'Find the $target and hold it in frame'
+                      : '⏳ hold it — '
+                          '${((1 - progress) * holdMs / 1000).toStringAsFixed(1)}s'
+                          ' to 100%',
                   style: TextStyle(
                     color: Colors.white,
                     fontWeight: FontWeight.w800,
                     fontSize: 14,
                     shadows: [Shadow(blurRadius: 10, color: Bg.ink.withValues(alpha: 0.7))],
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'the meter is hold time, not AI confidence — keep it in frame',
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.75),
+                    fontWeight: FontWeight.w600,
+                    fontSize: 10.5,
+                    shadows: [Shadow(blurRadius: 8, color: Bg.ink.withValues(alpha: 0.7))],
                   ),
                 ),
               ],
@@ -393,7 +439,7 @@ class _ScanHud extends StatelessWidget {
                         color: Colors.white.withValues(alpha: 0.92),
                         borderRadius: BorderRadius.circular(999),
                         border: Border.all(
-                          color: targets.contains(d.label)
+                          color: accepted.contains(d.label)
                               ? Bg.mint
                               : Colors.transparent,
                           width: 2,
@@ -489,4 +535,109 @@ class _MessageCard extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Draws each live detection as a named square: outline + "emoji label %"
+/// tag, green when the label counts as a hit for the current target.
+class _DetectionBoxes extends StatelessWidget {
+  const _DetectionBoxes({
+    required this.detections,
+    required this.accepted,
+    required this.frameWidth,
+    required this.frameHeight,
+    required this.sensorOrientation,
+    required this.squareSize,
+  });
+
+  final List<Detection> detections;
+  final Set<String> accepted;
+  final int frameWidth;
+  final int frameHeight;
+  final int sensorOrientation;
+  final int squareSize;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) => CustomPaint(
+        size: constraints.biggest,
+        painter: _BoxesPainter(
+          items: [
+            for (final d in detections)
+              _BoxItem(
+                rect: detectionBoxOnScreen(
+                  unit: d.box,
+                  frameWidth: frameWidth,
+                  frameHeight: frameHeight,
+                  sensorOrientation: sensorOrientation,
+                  squareSize: squareSize,
+                  screen: constraints.biggest,
+                ),
+                matched: accepted.contains(d.label),
+                text: d.label,
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _BoxItem {
+  const _BoxItem({required this.rect, required this.matched, required this.text});
+
+  final Rect rect;
+  final bool matched;
+  final String text;
+}
+
+class _BoxesPainter extends CustomPainter {
+  const _BoxesPainter({required this.items});
+
+  final List<_BoxItem> items;
+
+  @override
+  void paint(Canvas canvas, Size canvasSize) {
+    for (final item in items) {
+      final r = item.rect.deflate(3);
+      if (r.width < 30 || r.height < 30) continue;
+
+      final stroke = Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = item.matched ? 3.2 : 2.2
+        ..color = item.matched ? Bg.success : Colors.white.withValues(alpha: 0.85);
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(r, const Radius.circular(12)),
+        stroke,
+      );
+
+      // Named tag, clamped to the canvas.
+      final tp = TextPainter(
+        text: TextSpan(
+          text: '${targetEmoji(item.text)} ${item.text}',
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w800,
+            color: item.matched ? Colors.white : Bg.ink,
+          ),
+        ),
+        textDirection: TextDirection.ltr,
+      )..layout();
+      const tagH = 20.0;
+      final maxX = (canvasSize.width - tp.width - 18).clamp(0.0, canvasSize.width);
+      final tagX = r.left.clamp(0.0, maxX);
+      final tagY = (r.top - tagH - 2).clamp(4.0, canvasSize.height - tagH - 4);
+      final tagRect = Rect.fromLTWH(tagX, tagY, tp.width + 12, tagH);
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(tagRect, const Radius.circular(7)),
+        Paint()
+          ..style = PaintingStyle.fill
+          ..color = item.matched ? Bg.success : Colors.white.withValues(alpha: 0.92),
+      );
+      tp.paint(canvas, Offset(tagX + 6, tagY + 3));
+    }
+  }
+
+  @override
+  bool shouldRepaint(_BoxesPainter oldDelegate) => true;
 }

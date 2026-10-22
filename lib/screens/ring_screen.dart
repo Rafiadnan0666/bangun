@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -46,6 +47,13 @@ class _RingScreenState extends State<RingScreen>
     )..repeat();
     WakelockPlus.enable();
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+    // Spotify handoff is automatic: once the ring UI is up and the alarm
+    // audio session is warm, open the configured link inside Spotify so
+    // the playlist/song/artist becomes the wake sound itself. The built-in
+    // siren keeps ringing underneath until the gate is cleared.
+    Future<void>.delayed(const Duration(milliseconds: 1400), () {
+      if (mounted) _autoSpotifyHandoff();
+    });
   }
 
   @override
@@ -54,6 +62,42 @@ class _RingScreenState extends State<RingScreen>
     WakelockPlus.disable();
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     super.dispose();
+  }
+
+  /// Opens the alarm's pasted link best-first: item deep link
+  /// (`spotify:playlist:…`), then the raw URL, then the bare app shell.
+  Future<void> _openSpotify() async {
+    final raw = _alarm?.spotifyUrl?.trim() ?? '';
+    if (raw.isEmpty) return;
+    final deep = spotifyDeepLink(raw);
+    final candidates = [
+      ?deep,
+      raw,
+      'spotify://',
+    ];
+    for (final candidate in candidates) {
+      final uri = Uri.tryParse(candidate);
+      if (uri == null) continue;
+      try {
+        final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
+        if (kDebugMode) debugPrint('SPOTIFY handoff: $candidate → $ok');
+        if (ok) return;
+      } on Exception {
+        // No handler for this variant — try the next candidate.
+      }
+    }
+  }
+
+  bool _autoHandoffDone = false;
+
+  Future<void> _autoSpotifyHandoff() async {
+    if (_autoHandoffDone || !mounted) return;
+    final alarm = _alarm ?? context.read<AlarmRepository>().byId(widget.alarmId);
+    if (alarm == null || alarm.toneKind != ToneKind.spotify) return;
+    final raw = alarm.spotifyUrl?.trim() ?? '';
+    if (raw.isEmpty) return;
+    _autoHandoffDone = true;
+    await _openSpotify();
   }
 
   void _startChallenge(ChallengeKind gate) {
@@ -67,31 +111,6 @@ class _RingScreenState extends State<RingScreen>
         settings: RouteSettings(name: isMathGate ? '/math' : '/scan'),
       ),
     );
-  }
-
-  Future<void> _openSpotify() async {
-    final raw = _alarm?.spotifyUrl?.trim() ?? '';
-    if (raw.isEmpty) return;
-    final uri = Uri.tryParse(raw);
-    if (uri == null) return;
-    try {
-      final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
-      if (!ok) await _fallbackLaunch();
-    } on Exception {
-      await _fallbackLaunch();
-    }
-  }
-
-  Future<void> _fallbackLaunch() async {
-    // Best effort — try the bare spotify scheme if the pasted link failed.
-    try {
-      await launchUrl(
-        Uri.parse('spotify://'),
-        mode: LaunchMode.externalApplication,
-      );
-    } on Exception {
-      // Spotify simply isn't installed; the siren asset keeps ringing.
-    }
   }
 
   @override

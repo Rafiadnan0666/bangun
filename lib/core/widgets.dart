@@ -242,6 +242,7 @@ class EmojiChip extends StatelessWidget {
     required this.onTap,
     this.emoji,
     this.color,
+    this.idleBorder = Bg.hairline,
   });
 
   final String label;
@@ -249,16 +250,19 @@ class EmojiChip extends StatelessWidget {
   final VoidCallback? onTap;
   final String? emoji;
   final Color? color;
+  final Color idleBorder;
 
   @override
   Widget build(BuildContext context) {
     return AnimatedContainer(
-      duration: const Duration(milliseconds: 180),
+      // Slight overshoot for a playful pop.
+      duration: const Duration(milliseconds: 240),
+      curve: Curves.easeOutBack,
       decoration: BoxDecoration(
         color: selected ? (color ?? Bg.lemon) : Colors.white,
         borderRadius: BorderRadius.circular(999),
         border: Border.all(
-          color: selected ? Colors.transparent : Bg.hairline,
+          color: selected ? Colors.transparent : idleBorder,
           width: 1.4,
         ),
       ),

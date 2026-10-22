@@ -26,6 +26,16 @@ abstract final class Bg {
   static const olive = Color(0xFFA8C972);
   static const plum = Color(0xFF9C6ADE);
 
+  // Sound-card blue & white system (tone section only).
+  static const toneBlue = Color(0xFF1D74E0);
+  static const toneBlueDeep = Color(0xFF0B57C2);
+  static const toneSky = Color(0xFF3E97F5);
+  static const toneGradient = LinearGradient(
+    colors: [toneBlueDeep, toneBlue, toneSky],
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+  );
+
   // CTA gradient (orange -> pink, like the reference "Send again").
   static const ctaA = Color(0xFFFF8A3C);
   static const ctaB = Color(0xFFFF5E9C);
