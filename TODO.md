@@ -36,7 +36,23 @@
       Route B national proceedings (fast LOA backup). Route C fast international non-Scopus.
 - [x] Plagiarism-safety checklist + how we verified: `paper/cek-plagiarisme.md` (written from scratch, cited sources, no copy text).
 
-## 6. Current in-flight task (resumsable)
-- [ ] Real-ring test of the Spotify handoff: repository loader hardened (any bad payload can't kill boot),
-      analyze 0 issues / 28 tests / APK built — still need: install new build, re-inject alarm 9101
-      (wrapped in `[ ]` this time), let it ring, watch `SPOTIFY handoff:` logs, solve the math gate.
+## 6. Real-ring Spotify proof — ✅ PASSED (2026-10-22 20:26 device time)
+- Alarm 9101 injected → exact RTC_WAKEUP fired 20:26, ring screen showed
+  "Spotify ring test / Sound: Spotify link / Gate: Math × 2".
+- +1.4 s auto-handoff: `spotify:playlist:37i9dQZF1E35NbjQoPZcmv` tried first
+  (emulator has no Spotify → skipped) → raw URL → Chrome web player opened
+  (`SPOTIFY handoff: … → true`); siren kept ringing underneath. On a real phone
+  the first candidate opens the Spotify app itself.
+- All 3 math problems solved → 🎉 "Challenge cleared" (streak 2 · total 2),
+  once-alarm auto-disabled, zero `E/flutter`.
+
+## 7. Blue & white UI — ✅ redone properly
+- Whole sound card is now a deep-blue gradient (deep → blue → sky) with white
+  text everywhere; frosted-white idle chips / solid-white selected chip with
+  blue ink; white test pill (deep-blue playing state with white border +
+  whole-pill pulse); white slider + white captions; dancing white equalizer
+  bars in the header; play/stop are real Material icons (no orange emoji ▶).
+
+## 8. Git — ✅ pushed
+- `github.com/Rafiadnan0666/bangun` main branch (0e7ab64..950a1de);
+  `/paper/` excluded via `.gitignore`.
