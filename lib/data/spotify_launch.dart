@@ -85,7 +85,13 @@ Future<SpotifyStart> startSpotify(
   var searchTried = false;
   for (var i = 0; i < 15; i++) {
     await Future<void>.delayed(const Duration(milliseconds: 600));
-    if (await MediaControl.spotifyPlay()) return SpotifyStart.playing;
+    final sent = await MediaControl.spotifyPlay();
+    if (sent) {
+      // A successful send is not proof of playback: give Spotify a beat to
+      // publish STATE_PLAYING before we stop nudging.
+      await Future<void>.delayed(const Duration(milliseconds: 500));
+      if (await MediaControl.spotifyIsPlaying()) return SpotifyStart.playing;
+    }
     // Second native path: some builds ignore `:play` but start playback when
     // the media "play from search" intent carries the Spotify item URI.
     if (!searchTried && itemUri != null && i >= 4) {
@@ -125,7 +131,11 @@ Future<bool> keepSpotifyPlaying({
   final stopAt = DateTime.now().add(span);
   var attempt = 0;
   while (DateTime.now().isBefore(stopAt)) {
-    if (await MediaControl.spotifyPlay()) return true;
+    final sent = await MediaControl.spotifyPlay();
+    if (sent) {
+      await Future<void>.delayed(const Duration(milliseconds: 500));
+      if (await MediaControl.spotifyIsPlaying()) return true;
+    }
     if (await MediaControl.spotifyIsPlaying()) return true;
     if (deepUri != null && attempt == 5) {
       await MediaControl.spotifyPlayFromSearch(_itemUri(deepUri) ?? deepUri);

@@ -384,7 +384,7 @@ class _ReliabilityCardState extends State<_ReliabilityCard>
     final hasSpotify = context
         .watch<AlarmRepository>()
         .alarms
-        .any((a) => a.toneKind == ToneKind.spotify);
+        .any((a) => a.enabled && a.toneKind == ToneKind.spotify);
     final broken =
         !_notifications || !_fullScreen || (hasSpotify && !_spotifyAccess);
     if (!_loaded || !broken) {

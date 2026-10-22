@@ -135,6 +135,8 @@ class _RingScreenState extends State<RingScreen>
       // still booting). Keep nudging in the background.
       unawaited(keepSpotifyPlaying(deepUri: deep));
       _startSpotifyWatch();
+    } else if (result == SpotifyStart.playing) {
+      _startSpotifyWatch();
     }
   }
 
