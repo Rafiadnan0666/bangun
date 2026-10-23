@@ -46,21 +46,14 @@ Future<SpotifyStart> startSpotify(
   void Function(String candidate)? onOpened,
 }) async {
   final trimmed = rawUrl.trim();
-  if (trimmed.isEmpty) return SpotifyStart.unavailable;
+  if (!isSpotifyLink(trimmed)) return SpotifyStart.unavailable;
 
-  // Fast path: Spotify already has a session (music was playing earlier, or
-  // the user just tested it) — press play before opening anything.
-  if (await MediaControl.spotifyPlay()) return SpotifyStart.playing;
-
+  // Always open the configured item. Pressing play on an existing session
+  // first can resume yesterday's podcast instead of this alarm's link.
   final deep = spotifyDeepLink(trimmed);
   final playLink = _autoplayVariant(deep);
   final itemUri = _itemUri(deep);
-  final candidates = <String>[
-    ?playLink,
-    ?deep,
-    trimmed,
-    'spotify://',
-  ];
+  final candidates = <String>[?playLink, ?deep, trimmed, 'spotify://'];
   var opened = false;
   for (final candidate in candidates) {
     final uri = Uri.tryParse(candidate);
@@ -150,7 +143,7 @@ Future<bool> keepSpotifyPlaying({
 /// "open this link" affordance, where opening Spotify is enough.
 Future<bool> launchSpotify(String rawUrl, {bool autoplay = true}) async {
   final trimmed = rawUrl.trim();
-  if (trimmed.isEmpty) return false;
+  if (!isSpotifyLink(trimmed)) return false;
   final deep = spotifyDeepLink(trimmed);
   final candidates = <String>[
     if (autoplay) ?_autoplayVariant(deep),

@@ -20,11 +20,7 @@ import 'success_screen.dart';
 /// Detection runs on-device (COCO-SSD MobileNet); the ring ends only when the
 /// object has been held long enough to prove it's really there.
 class ScanChallengeScreen extends StatefulWidget {
-  const ScanChallengeScreen({
-    super.key,
-    required this.alarm,
-    this.chosenKind,
-  });
+  const ScanChallengeScreen({super.key, required this.alarm, this.chosenKind});
 
   final BangunAlarm alarm;
   final ChallengeKind? chosenKind;
@@ -33,12 +29,14 @@ class ScanChallengeScreen extends StatefulWidget {
   State<ScanChallengeScreen> createState() => _ScanChallengeScreenState();
 }
 
-class _ScanChallengeScreenState extends State<ScanChallengeScreen> {
+class _ScanChallengeScreenState extends State<ScanChallengeScreen>
+    with WidgetsBindingObserver {
   static const _holdMs = 3000;
 
   CameraController? _controller;
   String? _error;
   bool _permissionDenied = false;
+  bool _permissionPermanentlyDenied = false;
   List<Detection> _detections = const [];
   String? _matchedLabel;
   double _progress = 0;
@@ -57,10 +55,11 @@ class _ScanChallengeScreenState extends State<ScanChallengeScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     final pool = widget.alarm.scanTargets.isNotEmpty
         ? widget.alarm.scanTargets
         : const ['cup'];
-    // Near-miss labels stay fair game — see [kSimilarScanTargets].
+    // Near-miss labels stay fair game. See [kSimilarScanTargets].
     _accepted = acceptedScanLabelSet(pool);
     _target = pickScanTarget(pool, isTrial: _isTrial);
     if (kDebugMode) {
@@ -71,22 +70,45 @@ class _ScanChallengeScreenState extends State<ScanChallengeScreen> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _busy = true; // stop frame callbacks before disposing
     _controller?.dispose();
     super.dispose();
   }
 
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // The user may have granted camera access in system settings. Retry as
+    // soon as they come back instead of leaving a dead screen.
+    if (state == AppLifecycleState.resumed && _permissionDenied) {
+      _bootstrap();
+    }
+  }
+
   Future<void> _bootstrap() async {
     try {
       final status = await Permission.camera.status;
+      if (!mounted) return;
       if (!status.isGranted) {
+        if (status.isPermanentlyDenied) {
+          setState(() {
+            _permissionDenied = true;
+            _permissionPermanentlyDenied = true;
+          });
+          return;
+        }
         final asked = await Permission.camera.request();
+        if (!mounted) return;
         if (!asked.isGranted) {
-          setState(() => _permissionDenied = true);
+          setState(() {
+            _permissionDenied = true;
+            _permissionPermanentlyDenied = asked.isPermanentlyDenied;
+          });
           return;
         }
       }
       final cameras = await availableCameras();
+      if (!mounted) return;
       if (cameras.isEmpty) {
         setState(() => _error = 'No camera found on this device.');
         return;
@@ -95,6 +117,9 @@ class _ScanChallengeScreenState extends State<ScanChallengeScreen> {
       for (final c in cameras) {
         if (c.lensDirection == CameraLensDirection.back) pick = c;
       }
+      final old = _controller;
+      _controller = null;
+      await old?.dispose();
       final controller = CameraController(
         pick,
         ResolutionPreset.medium,
@@ -102,11 +127,24 @@ class _ScanChallengeScreenState extends State<ScanChallengeScreen> {
         imageFormatGroup: ImageFormatGroup.yuv420,
       );
       await controller.initialize();
+      if (!mounted) {
+        await controller.dispose();
+        return;
+      }
       _controller = controller;
       await controller.startImageStream(_onFrame);
-      setState(() => _error = null);
+      if (!mounted) {
+        await controller.dispose();
+        return;
+      }
+      setState(() {
+        _error = null;
+        _permissionDenied = false;
+        _permissionPermanentlyDenied = false;
+      });
     } on Exception catch (e) {
       debugPrint('camera bootstrap failed: $e');
+      if (!mounted) return;
       setState(() => _error = 'Camera failed to start. Reopen and retry.');
     }
   }
@@ -173,7 +211,8 @@ class _ScanChallengeScreenState extends State<ScanChallengeScreen> {
 
   Future<void> _finish(String? label) async {
     setState(() => _finishing = true);
-    final kind = widget.chosenKind ??
+    final kind =
+        widget.chosenKind ??
         (widget.alarm.challengeKind == ChallengeKind.scan
             ? ChallengeKind.scan
             : ChallengeKind.math);
@@ -182,11 +221,13 @@ class _ScanChallengeScreenState extends State<ScanChallengeScreen> {
     if (!mounted) return;
     Navigator.of(context).pushReplacement(
       MaterialPageRoute<void>(
+        settings: _isTrial ? null : const RouteSettings(name: '/gate-success'),
         builder: (_) => SuccessScreen(
           kind: kind,
           scannedLabel: label,
           streak: repo.stats.currentStreak,
           totalWins: repo.stats.totalWins,
+          isTrial: _isTrial,
         ),
       ),
     );
@@ -229,8 +270,7 @@ class _ScanChallengeScreenState extends State<ScanChallengeScreen> {
                   accepted: _accepted,
                   frameWidth: _frameW,
                   frameHeight: _frameH,
-                  sensorOrientation:
-                      _controller!.description.sensorOrientation,
+                  sensorOrientation: _controller!.description.sensorOrientation,
                   squareSize: CocoDetector.I.inputSize,
                 ),
               ),
@@ -238,13 +278,19 @@ class _ScanChallengeScreenState extends State<ScanChallengeScreen> {
               _MessageCard(
                 icon: '📷',
                 title: 'Camera permission needed',
-                body:
-                    'The scan gate runs on-device and needs the camera. Your '
-                    'frame is processed locally — nothing is uploaded.',
-                actionLabel: 'Grant camera access',
+                body: _permissionPermanentlyDenied
+                    ? 'Camera access is blocked. Open Android Settings, choose '
+                          'Permissions, then allow Camera for Bangun.'
+                    : 'The scan gate runs on-device and needs the camera. Your '
+                          'frame is processed locally, nothing is uploaded.',
+                actionLabel: _permissionPermanentlyDenied
+                    ? 'Open app settings'
+                    : 'Grant camera access',
                 onAction: () async {
-                  await Permission.camera.request();
-                  setState(() => _permissionDenied = false);
+                  if (_permissionPermanentlyDenied) {
+                    await openAppSettings();
+                    return;
+                  }
                   await _bootstrap();
                 },
               )
@@ -258,15 +304,17 @@ class _ScanChallengeScreenState extends State<ScanChallengeScreen> {
                   controllerRetry();
                 },
               )
-            else ...[_ScanHud(
-              target: _target,
-              progress: _progress,
-              detections: _detections,
-              matchedLabel: _matchedLabel,
-              accepted: _accepted,
-              holdMs: _holdMs,
-              isTrial: _isTrial,
-            )],
+            else ...[
+              _ScanHud(
+                target: _target,
+                progress: _progress,
+                detections: _detections,
+                matchedLabel: _matchedLabel,
+                accepted: _accepted,
+                holdMs: _holdMs,
+                isTrial: _isTrial,
+              ),
+            ],
           ],
         ),
       ),
@@ -314,7 +362,10 @@ class _ScanHud extends StatelessWidget {
               ),
               child: Row(
                 children: [
-                  Text(targetEmoji(target), style: const TextStyle(fontSize: 30)),
+                  Text(
+                    targetEmoji(target),
+                    style: const TextStyle(fontSize: 30),
+                  ),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Column(
@@ -401,13 +452,18 @@ class _ScanHud extends StatelessWidget {
                       : matchedLabel == null
                       ? 'Find the $target and hold it in frame'
                       : '⏳ hold it — '
-                          '${((1 - progress) * holdMs / 1000).toStringAsFixed(1)}s'
-                          ' to 100%',
+                            '${((1 - progress) * holdMs / 1000).toStringAsFixed(1)}s'
+                            ' to 100%',
                   style: TextStyle(
                     color: Colors.white,
                     fontWeight: FontWeight.w800,
                     fontSize: 14,
-                    shadows: [Shadow(blurRadius: 10, color: Bg.ink.withValues(alpha: 0.7))],
+                    shadows: [
+                      Shadow(
+                        blurRadius: 10,
+                        color: Bg.ink.withValues(alpha: 0.7),
+                      ),
+                    ],
                   ),
                 ),
                 const SizedBox(height: 4),
@@ -417,7 +473,12 @@ class _ScanHud extends StatelessWidget {
                     color: Colors.white.withValues(alpha: 0.75),
                     fontWeight: FontWeight.w600,
                     fontSize: 10.5,
-                    shadows: [Shadow(blurRadius: 8, color: Bg.ink.withValues(alpha: 0.7))],
+                    shadows: [
+                      Shadow(
+                        blurRadius: 8,
+                        color: Bg.ink.withValues(alpha: 0.7),
+                      ),
+                    ],
                   ),
                 ),
               ],
@@ -584,7 +645,11 @@ class _DetectionBoxes extends StatelessWidget {
 }
 
 class _BoxItem {
-  const _BoxItem({required this.rect, required this.matched, required this.text});
+  const _BoxItem({
+    required this.rect,
+    required this.matched,
+    required this.text,
+  });
 
   final Rect rect;
   final bool matched;
@@ -605,7 +670,9 @@ class _BoxesPainter extends CustomPainter {
       final stroke = Paint()
         ..style = PaintingStyle.stroke
         ..strokeWidth = item.matched ? 3.2 : 2.2
-        ..color = item.matched ? Bg.success : Colors.white.withValues(alpha: 0.85);
+        ..color = item.matched
+            ? Bg.success
+            : Colors.white.withValues(alpha: 0.85);
       canvas.drawRRect(
         RRect.fromRectAndRadius(r, const Radius.circular(12)),
         stroke,
@@ -624,7 +691,10 @@ class _BoxesPainter extends CustomPainter {
         textDirection: TextDirection.ltr,
       )..layout();
       const tagH = 20.0;
-      final maxX = (canvasSize.width - tp.width - 18).clamp(0.0, canvasSize.width);
+      final maxX = (canvasSize.width - tp.width - 18).clamp(
+        0.0,
+        canvasSize.width,
+      );
       final tagX = r.left.clamp(0.0, maxX);
       final tagY = (r.top - tagH - 2).clamp(4.0, canvasSize.height - tagH - 4);
       final tagRect = Rect.fromLTWH(tagX, tagY, tp.width + 12, tagH);
@@ -632,7 +702,9 @@ class _BoxesPainter extends CustomPainter {
         RRect.fromRectAndRadius(tagRect, const Radius.circular(7)),
         Paint()
           ..style = PaintingStyle.fill
-          ..color = item.matched ? Bg.success : Colors.white.withValues(alpha: 0.92),
+          ..color = item.matched
+              ? Bg.success
+              : Colors.white.withValues(alpha: 0.92),
       );
       tp.paint(canvas, Offset(tagX + 6, tagY + 3));
     }

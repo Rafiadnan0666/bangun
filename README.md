@@ -1,4 +1,4 @@
-# Bangun
+﻿# Bangun
 
 Bangun is an Android alarm clock that cannot be snoozed or dismissed. When the
 alarm rings, the only way to stop it is to finish the challenge configured for
@@ -47,8 +47,10 @@ This is the complete path from an alarm being saved to the phone being silent
 again.
 
 1. **Save.** The editor validates the form, builds a `BangunAlarm`, and passes
-   it to `AlarmRepository`. A one-time alarm whose time already passed rolls
-   to the next day.
+   it to `AlarmRepository`. A new one-time alarm whose time already passed is
+   scheduled for the next day. A one-time alarm whose slot passes while the
+   app is not running is retired at the next boot instead of ringing a day
+   late.
 2. **Schedule.** The repository converts the alarm to the plugin's settings and
    stores it. Android receives an `RTC_WAKEUP` exact alarm and a native copy of
    the settings. This copy is what makes the alarm survive process death.
@@ -97,9 +99,12 @@ The home screen has four main areas:
   opens the editor when tapped.
 
 The "Alarm reliability" card appears only when Android would block a reliable
-ring. It covers three cases: notifications are off, full-screen notifications
-are disallowed, and an enabled Spotify alarm is missing notification access.
-Each case has a one-tap fix and is re-checked when the app resumes.
+ring. It covers five cases: notifications are off, exact alarms are blocked,
+full-screen notifications are disallowed, an enabled Spotify alarm is missing
+notification access, and an enabled custom-file alarm points at a file that no
+longer exists. Each case has a one-tap fix and is re-checked when the app
+resumes. The missing-file row opens the affected alarm so you can pick the file
+again.
 
 ### Editor
 
@@ -117,9 +122,12 @@ The editor creates or edits an alarm. From top to bottom it contains:
 - Volume slider. The engine never goes below 35 percent while an alarm rings.
 - Save, or delete when editing an existing alarm.
 
-A Spotify alarm cannot be saved with an empty link. Selecting Spotify opens a
-notification-access dialog when the permission is missing, because Android
-does not allow any app to press play in Spotify without it.
+A Spotify alarm cannot be saved with an empty link or with a link that does
+not pass the Spotify host and item checks. The editor shows an inline error for
+a lookalike host or a search page, so a mistyped link never opens a browser
+behind the alarm. Selecting Spotify opens a notification-access dialog when the
+permission is missing, because Android does not allow any app to press play in
+Spotify without it.
 
 ### Ring screen
 
@@ -136,8 +144,9 @@ is automatic; the sheet button retries it manually.
 
 The math screen shows the progress (for example, Problem 3 of 3), a difficulty
 tag, the expression, and an answer field. The custom keypad has digits, delete,
-and a minus sign for negative answers. A wrong answer triggers a fresh problem
-at the current tier. There is no timer and no skip button.
+and a done button. There is no minus sign because every generated answer is a
+non-negative integer. A wrong answer clears the input and leaves the same
+problem on screen until it is solved. There is no timer and no skip button.
 
 ### Scan challenge
 
@@ -152,6 +161,9 @@ the screen reports the problem instead of pretending the gate passed.
 The streak screen reads the statistics stored by completed challenges. The
 trial tiles on the home screen open the same math and scan screens with a
 temporary alarm, so you can test the gates without waiting for a real alarm.
+Trials use id `0` and deliberately do not change total wins, math wins, scan
+wins, or the streak. The success screen says "Trial cleared" and "stats
+unchanged" so the difference is explicit.
 
 ---
 
@@ -189,10 +201,19 @@ and Digital chirp.
 
 ### Local audio file
 
-The file picker opens the Android document picker. Bangun reads the selected
-bytes and writes a durable copy named `tone_<timestamp>.<ext>` inside the
-app's documents directory. Preview and ring time both use that copy. The
-original file can be moved or deleted without breaking the alarm.
+The file picker opens the Android document picker. Bangun checks the size, then
+streams a copy named `tone_<timestamp>.<ext>` into the app's documents
+directory. Files above 25 MB are rejected with a readable message, and the copy
+is made without loading the whole file into memory. Preview and ring time both
+use the durable copy. The original file can be moved or deleted without
+breaking the alarm.
+
+A custom file can still disappear later because of a storage cleaner or a
+manual delete. When that happens, Bangun falls back to the alarm's built-in
+tone instead of failing to schedule or ringing in silence. The home
+reliability card shows which alarm is affected, and the editor blocks that file
+alarm from saving until a new file is picked or another tone is chosen. Files
+that no alarm references are swept on boot.
 
 ### Spotify
 
@@ -210,10 +231,13 @@ or a browser takes the foreground, Bangun brings the ring screen back on top
 with a silent alarm-category full-screen notification, so the gate stays
 visible while the music plays underneath.
 
-Supported link forms include `open.spotify.com` playlist, track, album, and
-artist links, links with `/intl-xx/` locale paths, links with tracking query
-parameters, and native `spotify:` URIs. A trailing `:play` is handled without
-being duplicated.
+Supported link forms include real `open.spotify.com` playlist, track, album,
+and artist links, links with `/intl-xx/` locale paths, links with tracking query
+parameters, native `spotify:` item URIs for those four kinds, and Spotify short
+links such as `spotify.link`. A trailing `:play` is handled without being
+duplicated. A link on any other host, a lookalike host such as
+`open.spotify.com.example`, a Spotify search page, or a malformed native URI is
+rejected before it can reach the ring handoff.
 
 If Spotify is missing, paused, offline, or restricted by the account, the twin
 chime keeps the alarm audible and the ring UI still works.
@@ -270,9 +294,13 @@ Grant these on first run:
 - **Notifications** (Android 13 and newer). Without them Android will not show
   the alarm notification or launch the full-screen ring screen.
 - **Exact alarms**. Bangun declares both `SCHEDULE_EXACT_ALARM` and
-  `USE_EXACT_ALARM`, which is allowed for alarm clock apps.
+  `USE_EXACT_ALARM`, which is allowed for alarm clock apps. The home
+  reliability card also checks this state and opens the correct system page if
+  it is ever revoked.
 - **Camera**. Required only for the scan gate. Frames are processed on the
-  device and are never stored or uploaded.
+  device and are never stored or uploaded. If camera access is permanently
+  denied, the scan screen offers a button that opens Android's app settings
+  and retries automatically when you return.
 - **Full-screen notifications**. On Android 14 and newer the user must allow
   this once for Bangun. The home reliability card detects the blocked state
   and opens the correct settings page.
@@ -286,7 +314,11 @@ phones. On Xiaomi, OPPO, vivo, and Huawei devices, allow autostart for Bangun
 and disable battery optimization for it.
 
 The app guards against corrupted stored data. A malformed alarm or statistics
-entry cannot crash app boot; the loader falls back to an empty state.
+entry cannot crash app boot; the loader falls back to an empty state. A
+missing custom tone is detected before scheduling, falls back to the built-in
+tone, and is surfaced on the home reliability card. The ring screen also
+watches the repository, so a cold start that beats the SharedPreferences load
+still shows the challenge buttons instead of a dead ring sheet.
 
 ---
 
@@ -314,9 +346,10 @@ To regenerate the built-in ring tones after editing the generator:
 dart tools/gen_sounds.dart
 ```
 
-The test suite currently has 29 tests covering the math engine, scan geometry,
-scan target selection, Spotify link parsing, and alarm scheduling helpers.
-`flutter analyze` must report no issues.
+The test suite currently has 40 tests covering the math engine, scan geometry,
+scan target selection, Spotify link validation, alarm model normalization, and
+missed one-time alarm handling. `flutter analyze` must report no issues.
+The debug APK build is also part of the verification pass.
 
 ---
 
@@ -327,8 +360,9 @@ lib/main.dart                  App shell, ring routing, text-scale clamp
 lib/core/palette.dart          Blue and white design tokens
 lib/core/widgets.dart          Shared cards, pills, and status rows
 lib/core/format.dart           Time and duration formatting
-lib/data/models.dart           Alarm model, tone model, Spotify link parsing
+lib/data/models.dart           Alarm model, tone model, Spotify link validation
 lib/data/alarm_repository.dart Alarm storage, native scheduling, ring events
+lib/data/tone_files.dart       Durable custom tone copy, cleanup, orphan sweep
 lib/data/math_engine.dart      Math problem generator
 lib/data/media_control.dart    Dart bridge to Android media and settings
 lib/data/spotify_launch.dart   Spotify start, retry, and keep-playing logic
@@ -338,17 +372,70 @@ lib/screens/editor_screen.dart Alarm form and sound picker
 lib/screens/ring_screen.dart   Lockdown ring screen and Spotify handoff
 lib/screens/math_challenge_screen.dart
 lib/screens/scan_challenge_screen.dart
+lib/screens/success_screen.dart Celebration and trial-mode copy
 lib/screens/streak_screen.dart
 assets/sounds/                Built-in WAV tones
 assets/models/                COCO-SSD TensorFlow Lite model
 android/app/src/main/kotlin/com/example/bangun/MainActivity.kt
                               Platform channel, full-screen settings,
-                              Spotify playback strategies, bring-to-front
+                              Spotify playback strategies, bring-back cleanup
 android/app/src/main/kotlin/com/example/bangun/MediaControlListenerService.kt
                               Notification listener used for media control
-test/                         Math, scan geometry, scan target, Spotify tests
+test/                         Math, scan, Spotify, and alarm model tests
 tools/gen_sounds.dart         Ring tone generator
 ```
+
+---
+
+## Audit findings and fixes
+
+A full pass over the app found a set of reliability, data, and honesty issues.
+The highest-impact ones are fixed in this version.
+
+- Trial runs used to be recorded in the real wake statistics. Alarm id `0` now
+  bypasses stats completely, and the success screen states that the stats did
+  not change.
+- A corrupt statistics record could throw a cast error during boot. The loader
+  now catches every object, not just `Exception`, and starts from an empty
+  stats state.
+- Runtime permission prompts could stack on top of a ring screen when the app
+  was launched by an alarm. Prompts are now skipped while an alarm is active.
+- A deleted custom tone could fail scheduling or ring in silence. Scheduling
+  now falls back to the built-in tone, the home card names the affected alarm,
+  the editor blocks that file alarm from saving until a file is picked or
+  another tone is chosen, and orphaned tone files are swept on boot.
+- File picking loaded the entire audio file into memory. It now streams a copy
+  and rejects files above 25 MB.
+- A missed one-time alarm could be re-armed for the next day. A boot and
+  host-drop check now retires a one-shot whose slot passed while the app was
+  not running.
+- A cold start could show the ring screen before the repository finished
+  loading, leaving no challenge buttons. The ring screen now watches the
+  repository and retries the Spotify handoff for a short window.
+- Replacing the ring route with a challenge could allow a duplicate ring
+  screen on resume. The route tracker now spans the ring, gate, and success
+  screens.
+- The success screen's auto-pop timer could pop a ring screen that arrived
+  during the celebration. It now pops only when its own route is current.
+- The Spotify fast path could resume yesterday's audio and report success
+  before the configured item was opened. It now always opens the configured
+  item and verifies the actual playing state.
+- Any non-empty text could be saved as a Spotify link and later open a browser
+  behind the alarm. Links are now checked against real Spotify hosts, with an
+  inline editor error, and the ring handoff rejects an invalid link.
+- A failed alarm save left the save button disabled forever. Save errors are
+  now caught, reported in a SnackBar, and the button is restored.
+- Permanent camera denial left the scan screen in a request loop. The screen
+  now opens app settings and retries when the app resumes.
+- The model defaulted to four math problems while the editor offered only 3, 5,
+  or 7. New alarms default to 3, and old four-problem records normalize to 3.
+- The bring-back notification could linger in the shade after the app returned.
+  It is cancelled when MainActivity resumes.
+- Exact alarm state was not visible in the app. The reliability card now
+  checks it and offers the correct settings action.
+
+Verification for this pass: `flutter analyze` reports no issues, 40 tests pass,
+and the debug APK builds successfully.
 
 ---
 
@@ -360,15 +447,140 @@ tools/gen_sounds.dart         Ring tone generator
 - Detection quality in the dark, at extreme angles, or on reflective surfaces
   is unmeasured. The hold meter is intentionally forgiving, but this is not a
   scientific benchmark. The paper discusses this threat to validity.
+- A printed photo or another screen showing the target can satisfy the scan
+  gate. The gate is a deterrent and a routine builder, not a cryptographic
+  proof that you are awake.
+- A scan-only alarm on a phone with a broken, blocked, or permanently denied
+  camera has no in-app escape. This is the deliberate cost of having no stop
+  button. Force-stop or reboot is the last resort. Use a mix alarm if the camera
+  is not dependable.
+- A time zone change or a daylight-saving jump can shift one occurrence. The
+  next repeating alarm is scheduled with the local clock again after that
+  occurrence.
+- Android force-stop cancels scheduled alarms until the app is opened again.
+  Normal process death, reboot, and lock screen are handled; force-stop is not.
+- Aggressive battery savers on some Xiaomi, OPPO, vivo, and Huawei builds can
+  still delay or kill background alarms. The autostart and battery advice above
+  is not optional on those phones.
+- The app clamps system text scaling at 1.12 to keep the ring and challenge
+  layouts usable. This is a tradeoff: users who rely on very large system text
+  do not get their full preferred scale.
+- Trial runs completed before this fix may already be present in old stats.
+  Statistics are local to the device, and no migration can reliably tell an old
+  trial win from a real one.
+- True Spotify playback could not be observed on the Android emulator because
+  Spotify was not installed there. The real handoff needs a physical phone and
+  notification access to verify end to end.
 - Spotify autoplay depends on notification access and on Spotify publishing a
   media session. Without the grant, the item still opens in Spotify, but the
   user may need to tap play once while the twin chime keeps guarding the
   wake-up.
+- An artist link opens the artist page, not a single track. Autoplay is
+  best-effort for an artist link. Use a track, album, or playlist when
+  guaranteed music matters.
 - A free Spotify account or a regional restriction can limit autoplay even
   when the handoff succeeds. Bangun reports the real outcome in the editor's
   test message.
 - iOS is not configured in this build. The `alarm` plugin supports it, but the
   Android lockdown behavior is the focus.
+
+---
+
+## Costs and free or low-cost monetization
+
+The core promise should stay free: the alarm rings, the gate works, and no ad
+ever appears on the ring, challenge, or success screen. An alarm earns trust by
+being boring and dependable. Monetization should sit around that core, not
+inside it.
+
+### One-time Pro unlock
+
+Use Google Play Billing for a single lifetime purchase. Keep the free version
+fully capable as an alarm. Put convenience and expression behind Pro:
+
+- Extra themes and ring-tone packs.
+- Extra math difficulty packs and scan target packs.
+- Indonesian language support and other locale packs.
+- A home-screen widget with the next alarm and streak.
+- Stats export and a yearly summary.
+- Multiple Spotify fallback links per alarm.
+- Family profiles on one phone.
+- Post-gate affirmation or reflection cards.
+
+A one-time price of roughly Rp 15,000 to Rp 29,000, or USD 2.99, fits a local
+utility app. It avoids the server cost and churn risk of a subscription for a
+single-player alarm.
+
+### Donations
+
+Add a quiet support link in About and after a seven-day streak. Do not interrupt
+the ring flow and do not nag. Useful channels in Indonesia are Saweria and
+Trakteer. Ko-fi, GitHub Sponsors, and Buy Me a Coffee work for international
+users. A donation does not need to unlock anything, but a small thank-you theme
+is a fair reward.
+
+### Sponsored challenge cards
+
+Sell an opt-in sponsored card in the trial area, not at ring time. A local coffee
+shop, gym, or campus cafe can sponsor a scan target such as a branded cup, with a
+coupon after the trial. Label the card clearly as sponsored. Selling directly to
+local businesses avoids an ad network and keeps the visual design under control.
+Track redemptions with a simple code, not with personal data.
+
+### B2B licensing and white label
+
+Sleep clinics, corporate wellness programs, boarding schools, universities, and
+shift-work teams need a reliable wake gate. Offer a branded build or a licensed
+team dashboard with a setup fee and annual support. This is the highest-value
+channel because the buyer cares about the outcome and the support, not about a
+small app price.
+
+### Grants and research partnerships
+
+The on-device, privacy-first design is a strong fit for student innovation
+grants, digital health research, and university partnerships. Publish the
+evaluation, keep the privacy story simple, and apply for campus or government
+innovation funding. A grant can pay for a study without changing the product
+for users.
+
+### Affiliate content, used sparingly
+
+An optional "morning routine" page can carry clearly disclosed affiliate links
+for coffee, mattresses, or Spotify Premium where the program exists. Keep this
+out of the alarm path. If affiliate terms do not fit the audience, skip the
+channel rather than weakening the product.
+
+### Optional ads with a hard boundary
+
+Rewarded or banner ads can work on the stats and settings screens, never on the
+ring, challenge, or success screens. AdMob is free to start. Ads probably lower
+trust for an alarm app, so treat them as a fallback and let Pro remove them. A
+modest Pro purchase is usually better than a permanent ad surface.
+
+### Costs to plan for
+
+- Google Play Console: one-time USD 25 registration.
+- No server is needed for the local core. Pro and donations can run without a
+  backend.
+- A family or team sync feature does need a server. Price it as a small annual
+  plan or a B2B contract, not as a hidden cost on free users.
+- Budget for a privacy policy, a support email, and a simple landing page.
+
+### Policy and brand notes
+
+- Follow Spotify's brand rules. Do not imply that Spotify endorses Bangun.
+- Publish a privacy policy that states the camera frames and alarms stay on the
+  device, and explain exactly what notification access is used for.
+- Google Play reviews exact-alarm and full-screen-intent apps closely. Keep the
+  alarm-clock use case explicit in the listing and the manifest.
+- Disclose every sponsored card and affiliate link in plain language.
+
+### Free growth
+
+Localization and store listing work cost time, not money. Short videos that show
+the scan gate failing and then succeeding are a natural demo. Campus ambassadors
+and a referral code for Pro can seed the first users. The most persuasive story
+is simple: no snooze, no silent failure, and no cloud.
 
 ---
 

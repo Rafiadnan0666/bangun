@@ -28,6 +28,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../core/format.dart';
 import 'coco_detector.dart';
 import 'models.dart';
+import 'tone_files.dart';
 
 /// Sentinel alarm id for "test challenge" runs (no native scheduling).
 const int trialAlarmId = 0;
@@ -74,9 +75,33 @@ class AlarmRepository extends ChangeNotifier {
     _prefs = await SharedPreferences.getInstance();
     _load();
 
-    unawaited(_requestRuntimePermissions());
+    // A one-shot whose slot passed while the app was dead must not be
+    // re-armed for tomorrow. The native layer already tried (and may have
+    // dropped it); retire it before syncing.
+    final now = DateTime.now();
+    var retired = false;
+    for (final a in _alarms) {
+      if (a.missedOneShot(now)) {
+        a.enabled = false;
+        retired = true;
+      }
+    }
+    if (retired) {
+      try {
+        await _persist();
+      } on Object catch (e) {
+        debugPrint('persist retired one-shots failed: $e');
+      }
+    }
+
+    // Never stack permission dialogs over a ring screen. A launch caused by
+    // an alarm goes straight to the gate; the reliability card handles setup
+    // on normal launches.
+    final ringing = Alarm.ringing.value.alarms.isNotEmpty;
+    if (!ringing) unawaited(_requestRuntimePermissions());
     await _syncAllToPlugin();
     unawaited(CocoDetector.I.load());
+    unawaited(ToneFiles.sweepOrphans([for (final a in _alarms) a.filePath]));
     notifyListeners();
   }
 
@@ -119,7 +144,9 @@ class AlarmRepository extends ChangeNotifier {
         stats = WakeStats.fromJson(
           Map<String, dynamic>.from(jsonDecode(statsRaw) as Map),
         );
-      } on FormatException {
+      } on Object {
+        // Corrupt or outdated statistics must never block app boot. Cast
+        // errors are Error, not Exception, so catch everything.
         stats = WakeStats();
       }
     }
@@ -154,12 +181,19 @@ class AlarmRepository extends ChangeNotifier {
   }
 
   Future<void> update(BangunAlarm alarm) async {
+    final old = byId(alarm.id);
     _alarms = [for (final a in _alarms) a.id == alarm.id ? alarm : a];
     await _persist();
     if (alarm.enabled) {
       await _syncToPlugin(alarm);
     } else {
-      await Alarm.stop(alarm.id);
+      await _stopQuietly(alarm.id);
+    }
+    if (old != null && old.filePath != alarm.filePath) {
+      await ToneFiles.deleteIfUnreferenced(
+        old.filePath,
+        _alarms.map((a) => a.filePath),
+      );
     }
     notifyListeners();
   }
@@ -173,30 +207,32 @@ class AlarmRepository extends ChangeNotifier {
     if (a.enabled) {
       await _syncToPlugin(a);
     } else {
-      await Alarm.stop(id);
+      await _stopQuietly(id);
     }
     notifyListeners();
   }
 
   Future<void> remove(int id) async {
+    final removed = byId(id);
     _alarms = [
       for (final a in _alarms)
         if (a.id != id) a,
     ];
     await _persist();
-    await Alarm.stop(id);
+    await _stopQuietly(id);
+    if (removed != null) {
+      await ToneFiles.deleteIfUnreferenced(
+        removed.filePath,
+        _alarms.map((a) => a.filePath),
+      );
+    }
     notifyListeners();
   }
 
   Future<void> duplicate(int id) async {
     final src = byId(id);
     if (src == null) return;
-    await create(
-      src.copyWith(
-        label: '${src.label} copy',
-        enabled: false,
-      ),
-    );
+    await create(src.copyWith(label: '${src.label} copy', enabled: false));
   }
 
   // ---- Plugin sync ---------------------------------------
@@ -208,14 +244,24 @@ class AlarmRepository extends ChangeNotifier {
       final native = await Alarm.getAlarms();
       for (final s in native) {
         if (_alarms.every((a) => a.id != s.id)) {
-          await Alarm.stop(s.id);
+          await _stopQuietly(s.id);
         }
       }
-    } on Exception {
+    } on Object {
       // Reconciliation continues with fresh arming below.
     }
     for (final a in _alarms) {
       if (a.enabled) await _syncToPlugin(a);
+    }
+  }
+
+  Future<void> _stopQuietly(int id) async {
+    try {
+      await Alarm.stop(id);
+    } on Object catch (e) {
+      // Stopping an already-stopped or missing alarm must not block CRUD or
+      // the end of a ring.
+      debugPrint('Alarm.stop($id) failed: $e');
     }
   }
 
@@ -224,7 +270,7 @@ class AlarmRepository extends ChangeNotifier {
     final when = a.nextOccurrence();
     try {
       return await Alarm.set(alarmSettings: _settingsFor(a, when));
-    } on Exception catch (e) {
+    } on Object catch (e) {
       debugPrint('Scheduling ${a.id} failed: $e');
       return false;
     }
@@ -235,12 +281,19 @@ class AlarmRepository extends ChangeNotifier {
   AlarmSettings _settingsFor(BangunAlarm a, DateTime when) {
     final asset = switch (a.toneKind) {
       ToneKind.builtin => a.tone.assetPath,
-      ToneKind.file => a.filePath!,
+      // The editor copies picked files into app documents, but a file can
+      // still disappear (storage cleaner, backup restore, manual delete).
+      // Fall back to the built-in tone instead of failing to schedule at all.
+      ToneKind.file =>
+        ToneFiles.exists(a.filePath) ? a.filePath! : a.tone.assetPath,
       // Spotify alarms must never blast the siren: Bangun opens Spotify and
       // presses play, while a gentle twin chime keeps the ring alive until
       // the gate is cleared (or if Spotify is unavailable).
       ToneKind.spotify => BuiltInTone.twinChime.assetPath,
     };
+    if (a.toneKind == ToneKind.file && !ToneFiles.exists(a.filePath)) {
+      debugPrint('Tone file missing for ${a.id}; using ${a.tone.title}');
+    }
     return AlarmSettings(
       id: a.id,
       dateTime: DateTime(
@@ -295,14 +348,12 @@ class AlarmRepository extends ChangeNotifier {
     }
   }
 
-  /// Challenge completed → stop, record, re-arm the next occurrence.
+  /// Challenge completed then stop, record, re-arm the next occurrence.
+  /// Trial runs use [trialAlarmId] and deliberately do not touch wake stats:
+  /// a demo is not a real morning.
   Future<void> completeRing(int id, ChallengeKind kind) async {
     if (id != trialAlarmId) {
-      try {
-        await Alarm.stop(id);
-      } on Exception {
-        // Stopping an already-stopped alarm is fine.
-      }
+      await _stopQuietly(id);
       final a = byId(id);
       if (a != null) {
         stats.record(kind);
@@ -312,18 +363,33 @@ class AlarmRepository extends ChangeNotifier {
           unawaited(_syncToPlugin(a));
         }
       }
-    } else {
-      stats.record(kind);
+      try {
+        await _persist();
+      } on Object catch (e) {
+        // The ring must still end even if storage is full or read-only.
+        debugPrint('persist after ring failed: $e');
+      }
     }
     _ringingId = null;
-    await _persist();
     notifyListeners();
   }
 
-  /// Re-arms one alarm after host-side changes (boot dropout etc.).
+  /// Re-arms one alarm after host-side changes (boot dropout etc.). A missed
+  /// one-shot is retired instead of being pushed to the next day.
   Future<void> rearm(int id) async {
     final a = byId(id);
-    if (a != null && a.enabled) await _syncToPlugin(a);
+    if (a == null || !a.enabled) return;
+    if (a.missedOneShot()) {
+      a.enabled = false;
+      try {
+        await _persist();
+      } on Object catch (e) {
+        debugPrint('persist retired one-shot failed: $e');
+      }
+      notifyListeners();
+      return;
+    }
+    await _syncToPlugin(a);
   }
 
   bool get hasAnyAlarms => _alarms.isNotEmpty;

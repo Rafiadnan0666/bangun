@@ -16,12 +16,14 @@ class SuccessScreen extends StatefulWidget {
     required this.streak,
     required this.totalWins,
     this.scannedLabel,
+    this.isTrial = false,
   });
 
   final ChallengeKind kind;
   final String? scannedLabel;
   final int streak;
   final int totalWins;
+  final bool isTrial;
 
   @override
   State<SuccessScreen> createState() => _SuccessScreenState();
@@ -62,9 +64,11 @@ class _SuccessScreenState extends State<SuccessScreen>
       ),
     );
     Future<void>.delayed(const Duration(milliseconds: 2900), () {
-      if (mounted) {
-        Navigator.of(context).popUntil((r) => r.isFirst);
-      }
+      if (!mounted) return;
+      // A real alarm may have opened its ring screen on top of this
+      // celebration. Never pop that screen: it is the only stop path.
+      if (ModalRoute.of(context)?.isCurrent != true) return;
+      Navigator.of(context).popUntil((r) => r.isFirst);
     });
   }
 
@@ -83,30 +87,40 @@ class _SuccessScreenState extends State<SuccessScreen>
         children: [
           DecoratedBox(
             decoration: BoxDecoration(gradient: Bg.ring),
-            child: const SafeArea(
+            child: SafeArea(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Text('🎉', style: TextStyle(fontSize: 66)),
-                  SizedBox(height: 14),
                   Text(
-                    'Challenge cleared!',
+                    widget.isTrial ? '🧪' : '🎉',
+                    style: const TextStyle(fontSize: 66),
+                  ),
+                  const SizedBox(height: 14),
+                  Text(
+                    widget.isTrial ? 'Trial cleared!' : 'Challenge cleared!',
                     textAlign: TextAlign.center,
-                    style: TextStyle(
+                    style: const TextStyle(
                       color: Colors.white,
                       fontWeight: FontWeight.w900,
                       fontSize: 30,
-                      shadows: [Shadow(color: Color(0x3D000000), blurRadius: 18)],
+                      shadows: [
+                        Shadow(color: Color(0x3D000000), blurRadius: 18),
+                      ],
                     ),
                   ),
-                  SizedBox(height: 8),
-                  Text(
-                    'You beat the gate — have a good morning.',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
+                  const SizedBox(height: 8),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 28),
+                    child: Text(
+                      widget.isTrial
+                          ? 'Demo complete. Your real wake stats did not change.'
+                          : 'You beat the gate. Have a good morning.',
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ),
                 ],
@@ -132,7 +146,7 @@ class _SuccessScreenState extends State<SuccessScreen>
                   Text(
                     didScan
                         ? '${targetEmoji(widget.scannedLabel ?? 'cup')} '
-                            '${widget.scannedLabel ?? 'object'}'
+                              '${widget.scannedLabel ?? 'object'}'
                         : '🧮 math',
                     style: const TextStyle(
                       fontWeight: FontWeight.w900,
@@ -149,7 +163,9 @@ class _SuccessScreenState extends State<SuccessScreen>
                   ),
                   const SizedBox(width: 6),
                   Text(
-                    'streak ${widget.streak} · total ${widget.totalWins}',
+                    widget.isTrial
+                        ? 'trial · stats unchanged'
+                        : 'streak ${widget.streak} · total ${widget.totalWins}',
                     style: const TextStyle(
                       fontWeight: FontWeight.w800,
                       fontSize: 13,
@@ -207,7 +223,10 @@ class _ConfettiPainter extends CustomPainter {
         canvas.save();
         canvas.translate(dx, dy);
         canvas.rotate(r + c.x * 6);
-        canvas.drawRect(Rect.fromCenter(center: Offset.zero, width: s, height: s * 0.6), paint);
+        canvas.drawRect(
+          Rect.fromCenter(center: Offset.zero, width: s, height: s * 0.6),
+          paint,
+        );
         canvas.restore();
       }
     }

@@ -14,11 +14,7 @@ import 'success_screen.dart';
 /// Puzzles are generated procedurally (see [MathEngine]) — fresh at every
 /// ring, integer-safe, with a warm-up → brain-melt ramp.
 class MathChallengeScreen extends StatefulWidget {
-  const MathChallengeScreen({
-    super.key,
-    required this.alarm,
-    this.chosenKind,
-  });
+  const MathChallengeScreen({super.key, required this.alarm, this.chosenKind});
 
   final BangunAlarm alarm;
 
@@ -92,7 +88,8 @@ class _MathChallengeScreenState extends State<MathChallengeScreen> {
 
   Future<void> _finish() async {
     setState(() => _finishing = true);
-    final kind = widget.chosenKind ??
+    final kind =
+        widget.chosenKind ??
         (widget.alarm.challengeKind == ChallengeKind.scan
             ? ChallengeKind.scan
             : ChallengeKind.math);
@@ -101,10 +98,12 @@ class _MathChallengeScreenState extends State<MathChallengeScreen> {
     if (!mounted) return;
     Navigator.of(context).pushReplacement(
       MaterialPageRoute<void>(
+        settings: _isTrial ? null : const RouteSettings(name: '/gate-success'),
         builder: (_) => SuccessScreen(
           kind: kind,
           streak: repo.stats.currentStreak,
           totalWins: repo.stats.totalWins,
+          isTrial: _isTrial,
         ),
       ),
     );
@@ -231,9 +230,7 @@ class _MathChallengeScreenState extends State<MathChallengeScreen> {
                                 style: TextStyle(
                                   fontSize: 36,
                                   fontWeight: FontWeight.w900,
-                                  color: _input.isEmpty
-                                      ? Bg.subFaint
-                                      : Bg.ink,
+                                  color: _input.isEmpty ? Bg.subFaint : Bg.ink,
                                 ),
                               ),
                             ),
@@ -329,7 +326,10 @@ class _Keypad extends StatelessWidget {
             child: Row(
               children: [
                 _cell(
-                  const Text('⌫', style: TextStyle(fontSize: 22, color: Bg.sub)),
+                  const Text(
+                    '⌫',
+                    style: TextStyle(fontSize: 22, color: Bg.sub),
+                  ),
                   onBackspace,
                   bg: Bg.cardSoft,
                 ),
@@ -366,4 +366,3 @@ class _Keypad extends StatelessWidget {
     );
   }
 }
-

@@ -88,11 +88,7 @@ class _BangunAppState extends State<BangunApp> with WidgetsBindingObserver {
     if (set.alarms.isEmpty || _ringTracker.open) return;
     final id = set.alarms.first.id;
     _ringTracker.open = true;
-    unawaited(
-      navigator
-          .push(RingScreen.route(id))
-          .then((_) => _ringTracker.open = false),
-    );
+    unawaited(navigator.push(RingScreen.route(id)));
   }
 
   @override
@@ -130,32 +126,39 @@ class _BangunAppState extends State<BangunApp> with WidgetsBindingObserver {
   }
 }
 
-/// Keeps a simple answer to "is our /ring route on the stack?" so repeated
-/// ring events never stack duplicate ring screens.
+/// Keeps a simple answer to "is a real ring flow already on the stack?" so
+/// repeated ring events never stack duplicate ring screens. The flow spans
+/// the ring screen, the chosen gate, and the success celebration; it ends
+/// only when the last of those routes leaves the stack.
 class _RingRouteTracker extends NavigatorObserver {
   bool open = false;
 
-  static bool _isRing(Route<dynamic>? route) =>
-      route?.settings.name == '/ring';
+  static const _flowNames = {'/ring', '/math', '/scan', '/gate-success'};
+
+  static bool _isFlow(Route<dynamic>? route) =>
+      _flowNames.contains(route?.settings.name);
 
   @override
   void didPush(Route<dynamic> route, Route<dynamic>? previousRoute) {
-    if (_isRing(route)) open = true;
+    if (_isFlow(route)) open = true;
   }
 
   @override
   void didPop(Route<dynamic> route, Route<dynamic>? previousRoute) {
-    if (_isRing(route)) open = false;
+    if (_isFlow(route)) open = _isFlow(previousRoute);
   }
 
   @override
   void didRemove(Route<dynamic> route, Route<dynamic>? previousRoute) {
-    if (_isRing(route)) open = false;
+    if (_isFlow(route)) open = _isFlow(previousRoute);
   }
 
   @override
   void didReplace({Route<dynamic>? newRoute, Route<dynamic>? oldRoute}) {
-    if (_isRing(oldRoute)) open = false;
-    if (_isRing(newRoute)) open = true;
+    if (_isFlow(newRoute)) {
+      open = true;
+    } else if (_isFlow(oldRoute)) {
+      open = false;
+    }
   }
 }

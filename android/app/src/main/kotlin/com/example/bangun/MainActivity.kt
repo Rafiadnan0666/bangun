@@ -36,6 +36,15 @@ import io.flutter.plugin.common.MethodChannel
 class MainActivity : FlutterActivity() {
     private val channelName = "bangun/media"
 
+    override fun onResume() {
+        super.onResume()
+        // The bring-back notification is only a vehicle for the full-screen
+        // intent. Once Bangun is in front, drop it so no stale "alarm" card
+        // sits in the shade after the gate is finished.
+        getSystemService(NotificationManager::class.java)
+            ?.cancel(BRING_BACK_REQUEST)
+    }
+
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, channelName)

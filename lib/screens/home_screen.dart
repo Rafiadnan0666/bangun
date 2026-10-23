@@ -8,6 +8,7 @@ import '../core/widgets.dart';
 import '../data/alarm_repository.dart';
 import '../data/media_control.dart';
 import '../data/models.dart';
+import '../data/tone_files.dart';
 import 'editor_screen.dart';
 import 'math_challenge_screen.dart';
 import 'scan_challenge_screen.dart';
@@ -41,7 +42,7 @@ class _HomeScreenState extends State<HomeScreen> {
     hour: DateTime.now().hour,
     minute: (DateTime.now().minute + 1) % 60,
     challengeKind: kind,
-    mathProblems: 4,
+    mathProblems: 3,
     scanTargets: const ['cup'],
     createdAt: DateTime.now(),
   );
@@ -73,9 +74,14 @@ class _HomeScreenState extends State<HomeScreen> {
               onStats: _showStatsSheet,
             ),
             const SizedBox(height: 22),
-            _FilterTabs(current: _filter, onChange: (v) => setState(() => _filter = v)),
+            _FilterTabs(
+              current: _filter,
+              onChange: (v) => setState(() => _filter = v),
+            ),
             const SizedBox(height: 12),
-            if (_visible.isEmpty) const _EmptyState() else ...[
+            if (_visible.isEmpty)
+              const _EmptyState()
+            else ...[
               for (final a in _visible) _AlarmRow(alarm: a),
             ],
             const SizedBox(height: 20),
@@ -95,9 +101,8 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _openEditor() {
-    Navigator.of(context).push(
-      MaterialPageRoute<void>(builder: (_) => const EditorScreen()),
-    );
+    Navigator.of(context)
+        .push(MaterialPageRoute<void>(builder: (_) => const EditorScreen()));
   }
 
   void _showStatsSheet() {
@@ -217,7 +222,10 @@ class _HeroNextAlarm extends StatelessWidget {
         children: [
           const Row(
             children: [
-              Text('◔ next alarm', style: TextStyle(color: Colors.white70, fontSize: 12.5)),
+              Text(
+                '◔ next alarm',
+                style: TextStyle(color: Colors.white70, fontSize: 12.5),
+              ),
             ],
           ),
           const SizedBox(height: 10),
@@ -245,7 +253,10 @@ class _HeroNextAlarm extends StatelessWidget {
           Row(
             children: [
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 8,
+                ),
                 decoration: BoxDecoration(
                   color: Colors.white.withValues(alpha: 0.22),
                   borderRadius: BorderRadius.circular(999),
@@ -288,9 +299,7 @@ class _StatusCard extends StatelessWidget {
         children: [
           StatusRow(
             leading: 'Alarm',
-            value: alarm == null
-                ? '— none enabled'
-                : alarm!.label,
+            value: alarm == null ? '— none enabled' : alarm!.label,
           ),
           const Divider(),
           StatusRow(
@@ -308,13 +317,13 @@ class _StatusCard extends StatelessWidget {
             value: alarm == null
                 ? '—'
                 : alarm!.repeatMode == RepeatMode.weekly
-                    ? repeatLabel(daily: false, days: alarm!.days)
-                    : repeatLabel(
-                        daily: alarm!.repeatMode == RepeatMode.daily,
-                        days: alarm!.repeatMode == RepeatMode.daily
-                            ? const [1, 2, 3, 4, 5, 6, 7]
-                            : const [],
-                      ),
+                ? repeatLabel(daily: false, days: alarm!.days)
+                : repeatLabel(
+                    daily: alarm!.repeatMode == RepeatMode.daily,
+                    days: alarm!.repeatMode == RepeatMode.daily
+                        ? const [1, 2, 3, 4, 5, 6, 7]
+                        : const [],
+                  ),
           ),
           if (stats.totalWins > 0) ...[
             const Divider(),
@@ -344,6 +353,7 @@ class _ReliabilityCard extends StatefulWidget {
 class _ReliabilityCardState extends State<_ReliabilityCard>
     with WidgetsBindingObserver {
   bool _notifications = true;
+  bool _exactAlarms = true;
   bool _fullScreen = true;
   bool _spotifyAccess = true;
   bool _loaded = false;
@@ -368,11 +378,18 @@ class _ReliabilityCardState extends State<_ReliabilityCard>
 
   Future<void> _refresh() async {
     final notifications = await Permission.notification.isGranted;
+    var exactAlarms = true;
+    try {
+      exactAlarms = await Permission.scheduleExactAlarm.isGranted;
+    } on Object {
+      // Unsupported platform: do not show a bogus warning.
+    }
     final fullScreen = await MediaControl.canUseFullScreenIntent();
     final access = await MediaControl.hasNotificationAccess();
     if (!mounted) return;
     setState(() {
       _notifications = notifications;
+      _exactAlarms = exactAlarms;
       _fullScreen = fullScreen;
       _spotifyAccess = access;
       _loaded = true;
@@ -381,12 +398,25 @@ class _ReliabilityCardState extends State<_ReliabilityCard>
 
   @override
   Widget build(BuildContext context) {
-    final hasSpotify = context
-        .watch<AlarmRepository>()
-        .alarms
-        .any((a) => a.enabled && a.toneKind == ToneKind.spotify);
+    final repo = context.watch<AlarmRepository>();
+    final hasSpotify = repo.alarms.any(
+      (a) => a.enabled && a.toneKind == ToneKind.spotify,
+    );
+    BangunAlarm? missingTone;
+    for (final a in repo.alarms) {
+      if (a.enabled &&
+          a.toneKind == ToneKind.file &&
+          !ToneFiles.exists(a.filePath)) {
+        missingTone = a;
+        break;
+      }
+    }
     final broken =
-        !_notifications || !_fullScreen || (hasSpotify && !_spotifyAccess);
+        !_notifications ||
+        !_exactAlarms ||
+        !_fullScreen ||
+        (hasSpotify && !_spotifyAccess) ||
+        missingTone != null;
     if (!_loaded || !broken) {
       return const SizedBox.shrink();
     }
@@ -398,8 +428,11 @@ class _ReliabilityCardState extends State<_ReliabilityCard>
           children: [
             const Row(
               children: [
-                Icon(Icons.notifications_active_rounded,
-                    size: 18, color: Bg.ctaA),
+                Icon(
+                  Icons.notifications_active_rounded,
+                  size: 18,
+                  color: Bg.ctaA,
+                ),
                 SizedBox(width: 8),
                 Expanded(
                   child: Text(
@@ -416,8 +449,8 @@ class _ReliabilityCardState extends State<_ReliabilityCard>
             if (!_notifications) ...[
               const SizedBox(height: 6),
               _line(
-                'Notifications are off — Android will not show or launch the '
-                'alarm screen. Allow them and the ring pops up by itself.',
+                'Notifications are off. Android will not show or launch the '
+                    'alarm screen. Allow them and the ring pops up by itself.',
                 'Allow notifications',
                 () async {
                   await Permission.notification.request();
@@ -425,12 +458,30 @@ class _ReliabilityCardState extends State<_ReliabilityCard>
                 },
               ),
             ],
+            if (!_exactAlarms) ...[
+              const SizedBox(height: 6),
+              _line(
+                'Exact alarms are off. Android may delay the ring or skip it '
+                    'when the phone is idle. Allow exact alarms for Bangun.',
+                'Allow exact alarms',
+                () async {
+                  final status = await Permission.scheduleExactAlarm.status;
+                  if (status.isPermanentlyDenied) {
+                    await openAppSettings();
+                  } else {
+                    await Permission.scheduleExactAlarm.request();
+                  }
+                  await Future<void>.delayed(const Duration(seconds: 1));
+                  await _refresh();
+                },
+              ),
+            ],
             if (!_fullScreen) ...[
               const SizedBox(height: 6),
               _line(
-                'Full-screen alarms are off — the ring screen will not cover '
-                'the lock screen at alarm time. Allow full-screen '
-                'notifications for Bangun.',
+                'Full-screen alarms are off. The ring screen will not cover '
+                    'the lock screen at alarm time. Allow full-screen '
+                    'notifications for Bangun.',
                 'Allow full-screen',
                 () async {
                   await MediaControl.openFullScreenIntentSettings();
@@ -443,13 +494,30 @@ class _ReliabilityCardState extends State<_ReliabilityCard>
               const SizedBox(height: 6),
               _line(
                 'Your Spotify alarm needs notification access before Bangun '
-                'can press play by itself. Without it Spotify opens paused '
-                'and you only hear the backup chime.',
+                    'can press play by itself. Without it Spotify opens paused '
+                    'and you only hear the backup chime.',
                 'Allow Spotify auto-play',
                 () async {
                   await MediaControl.openNotificationAccessSettings();
                   await Future<void>.delayed(const Duration(seconds: 1));
                   await _refresh();
+                },
+              ),
+            ],
+            if (missingTone != null) ...[
+              const SizedBox(height: 6),
+              _line(
+                'The custom tone for "${missingTone.label}" is missing. '
+                    'Bangun will ring with ${missingTone.tone.title} until you '
+                    'pick the file again.',
+                'Review alarm',
+                () async {
+                  await Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => EditorScreen(existing: missingTone),
+                    ),
+                  );
+                  if (mounted) setState(() {});
                 },
               ),
             ],
@@ -609,14 +677,11 @@ class _AlarmRow extends StatelessWidget {
                   borderRadius: BorderRadius.circular(18),
                 ),
                 alignment: Alignment.center,
-                child: Text(
-                  switch (alarm.challengeKind) {
-                    ChallengeKind.math => '🧮',
-                    ChallengeKind.scan => '📷',
-                    ChallengeKind.mix => '🔀',
-                  },
-                  style: const TextStyle(fontSize: 22),
-                ),
+                child: Text(switch (alarm.challengeKind) {
+                  ChallengeKind.math => '🧮',
+                  ChallengeKind.scan => '📷',
+                  ChallengeKind.mix => '🔀',
+                }, style: const TextStyle(fontSize: 22)),
               ),
               const SizedBox(width: 14),
               Expanded(
@@ -682,7 +747,10 @@ class _AlarmRow extends StatelessWidget {
                 children: [
                   Transform.scale(
                     scale: 1.05,
-                    child: ValueSwitch(value: alarm.enabled, onChanged: (_) => repo.toggle(alarm.id)),
+                    child: ValueSwitch(
+                      value: alarm.enabled,
+                      onChanged: (_) => repo.toggle(alarm.id),
+                    ),
                   ),
                   const SizedBox(height: 6),
                   Text(
@@ -847,7 +915,10 @@ class _StatsSheet extends StatelessWidget {
             value: '${stats.currentStreak} day(s)',
           ),
           const Divider(),
-          StatusRow(leading: 'Best streak', value: '${stats.bestStreak} day(s)'),
+          StatusRow(
+            leading: 'Best streak',
+            value: '${stats.bestStreak} day(s)',
+          ),
           const Divider(),
           StatusRow(leading: 'Total wins', value: '${stats.totalWins}'),
           const Divider(),

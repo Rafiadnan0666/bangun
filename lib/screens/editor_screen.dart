@@ -5,7 +5,6 @@ import 'dart:math' as math;
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart' hide RepeatMode;
 import 'package:flutter/services.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
 
 import '../core/format.dart';
@@ -15,6 +14,7 @@ import '../data/alarm_repository.dart';
 import '../data/media_control.dart';
 import '../data/models.dart';
 import '../data/spotify_launch.dart';
+import '../data/tone_files.dart';
 import '../data/tone_preview.dart';
 
 /// Create / edit an alarm. All challenge + tone configuration lives here —
@@ -55,7 +55,9 @@ class _EditorScreenState extends State<EditorScreen> {
   void initState() {
     super.initState();
     final a = widget.existing;
-    _labelCtrl = TextEditingController(text: a?.label ?? (a == null ? 'Wake up' : ''));
+    _labelCtrl = TextEditingController(
+      text: a?.label ?? (a == null ? 'Wake up' : ''),
+    );
     _spotifyUrl = a?.spotifyUrl;
     _spotifyCtrl = TextEditingController(text: _spotifyUrl ?? '');
     _hour = a?.hour ?? 7;
@@ -63,7 +65,7 @@ class _EditorScreenState extends State<EditorScreen> {
     _repeatMode = a?.repeatMode ?? RepeatMode.once;
     _days = a == null ? {1, 2, 3, 4, 5, 6, 7} : a.days.toSet();
     _kind = a?.challengeKind ?? ChallengeKind.math;
-    _problems = a?.mathProblems ?? 4;
+    _problems = a?.mathProblems ?? 3;
     _targets = a?.scanTargets.toSet() ?? {'cup'};
     _toneKind = a?.toneKind ?? ToneKind.builtin;
     _tone = a?.tone ?? BuiltInTone.morningBricks;
@@ -114,39 +116,62 @@ class _EditorScreenState extends State<EditorScreen> {
 
   Future<void> _pickFile() async {
     try {
-      final result = await FilePicker.platform.pickFiles(
-        type: FileType.audio,
-        withData: true,
-      );
+      final result = await FilePicker.platform.pickFiles(type: FileType.audio);
       final picked = result?.files.firstOrNull;
       if (picked == null) return;
+      final sourcePath = picked.path;
+      if (sourcePath == null) {
+        _showMessage('That file could not be opened. Try another audio file.');
+        return;
+      }
+      final source = File(sourcePath);
+      final size = await source.length();
+      if (size > ToneFiles.maxBytes) {
+        _showMessage('Pick an audio file smaller than 25 MB.');
+        return;
+      }
       // Copy into the app's documents directory: system cache copies get
       // evicted and SAF read grants expire, which is exactly how a "custom
       // file" alarm ends up silent (or default-toned) after a while.
-      final ext = (picked.extension ?? 'audio').toLowerCase();
-      final docs = await getApplicationDocumentsDirectory();
-      final durable = File(
-        '${docs.path}/tone_${DateTime.now().millisecondsSinceEpoch}.$ext',
-      );
-      final bytes = picked.bytes ?? await File(picked.path!).readAsBytes();
-      await durable.writeAsBytes(bytes);
+      final previous = _filePath;
+      final durablePath = await ToneFiles.store(source, picked.extension);
+      if (!mounted) {
+        await ToneFiles.deleteIfUnreferenced(durablePath, const []);
+        return;
+      }
       setState(() {
-        _filePath = durable.path;
+        _filePath = durablePath;
         _fileLabel = picked.name;
         _toneKind = ToneKind.file;
       });
-    } on Exception catch (e) {
+      if (previous != null && previous != durablePath) {
+        final repo = context.read<AlarmRepository>();
+        unawaited(
+          ToneFiles.deleteIfUnreferenced(
+            previous,
+            repo.alarms.map((a) => a.filePath),
+          ),
+        );
+      }
+    } on Object catch (e) {
       debugPrint('pick audio file failed: $e');
+      _showMessage('Could not copy that audio file. Try another one.');
     }
+  }
+
+  void _showMessage(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(message)));
   }
 
   bool get _canSave {
     if (_kind == ChallengeKind.scan && _targets.isEmpty) return false;
-    if (_toneKind == ToneKind.file && (_filePath == null || _filePath!.isEmpty)) {
+    if (_toneKind == ToneKind.file && !ToneFiles.exists(_filePath)) {
       return false;
     }
-    if (_toneKind == ToneKind.spotify &&
-        _spotifyCtrl.text.trim().isEmpty) {
+    if (_toneKind == ToneKind.spotify && !isSpotifyLink(_spotifyCtrl.text)) {
       return false;
     }
     return true;
@@ -205,12 +230,15 @@ class _EditorScreenState extends State<EditorScreen> {
     if (!_canSave || _saving) return;
     setState(() => _saving = true);
     final repo = context.read<AlarmRepository>();
-    final label = _labelCtrl.text.trim().isEmpty ? 'Alarm' : _labelCtrl.text.trim();
+    final label = _labelCtrl.text.trim().isEmpty
+        ? 'Alarm'
+        : _labelCtrl.text.trim();
     final mode = _repeatMode == RepeatMode.weekly && _days.isEmpty
         ? RepeatMode.once
         : _repeatMode;
     final alarm = BangunAlarm(
-      id: widget.existing?.id ??
+      id:
+          widget.existing?.id ??
           DateTime.now().millisecondsSinceEpoch % 2147483000,
       label: label,
       hour: _hour,
@@ -226,17 +254,33 @@ class _EditorScreenState extends State<EditorScreen> {
       filePath: _filePath,
       fileLabel: _fileLabel,
       spotifyUrl: _toneKind == ToneKind.spotify
-          ? (_spotifyCtrl.text.trim().isEmpty
-                ? null
-                : _spotifyCtrl.text.trim())
+          ? (_spotifyCtrl.text.trim().isEmpty ? null : _spotifyCtrl.text.trim())
           : _spotifyUrl?.trim(),
       volume: _volume,
       createdAt: widget.existing?.createdAt ?? DateTime.now(),
     );
     if (_isEditing) {
-      await repo.update(alarm);
+      try {
+        await repo.update(alarm);
+      } on Object catch (e) {
+        debugPrint('save alarm failed: $e');
+        if (mounted) {
+          setState(() => _saving = false);
+          _showMessage('Could not save the alarm. Try again.');
+        }
+        return;
+      }
     } else {
-      await repo.create(alarm);
+      try {
+        await repo.create(alarm);
+      } on Object catch (e) {
+        debugPrint('create alarm failed: $e');
+        if (mounted) {
+          setState(() => _saving = false);
+          _showMessage('Could not save the alarm. Try again.');
+        }
+        return;
+      }
     }
     if (!mounted) return;
     Navigator.of(context).pop();
@@ -250,6 +294,14 @@ class _EditorScreenState extends State<EditorScreen> {
   Future<void> _testSound() async {
     if (TonePreview.playing.value) {
       await TonePreview.stop();
+      return;
+    }
+    if (_toneKind == ToneKind.file && !ToneFiles.exists(_filePath)) {
+      _showMessage('The selected file is missing. Pick it again first.');
+      return;
+    }
+    if (_toneKind == ToneKind.spotify && !isSpotifyLink(_spotifyCtrl.text)) {
+      _showMessage('Paste a Spotify track, album, artist, or playlist link.');
       return;
     }
     if (_toneKind == ToneKind.spotify && !await _promptSpotifyAccess()) return;
@@ -335,7 +387,10 @@ class _EditorScreenState extends State<EditorScreen> {
       body: SafeArea(
         child: Column(
           children: [
-            _EditorHeader(isEditing: _isEditing, onDelete: _isEditing ? _delete : null),
+            _EditorHeader(
+              isEditing: _isEditing,
+              onDelete: _isEditing ? _delete : null,
+            ),
             Expanded(
               child: ListView(
                 padding: const EdgeInsets.fromLTRB(20, 4, 20, 28),
@@ -388,6 +443,10 @@ class _EditorScreenState extends State<EditorScreen> {
                     fileLabel: _fileLabel,
                     filePath: _filePath,
                     spotifyCtrl: _spotifyCtrl,
+                    spotifyInvalid:
+                        _toneKind == ToneKind.spotify &&
+                        _spotifyCtrl.text.trim().isNotEmpty &&
+                        !isSpotifyLink(_spotifyCtrl.text),
                     volume: _volume,
                     onTone: (t) => setState(() {
                       _tone = t;
@@ -599,7 +658,11 @@ class _RoundBtn extends StatelessWidget {
         alignment: Alignment.center,
         child: Text(
           icon,
-          style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15, color: Bg.ink),
+          style: const TextStyle(
+            fontWeight: FontWeight.w800,
+            fontSize: 15,
+            color: Bg.ink,
+          ),
         ),
       ),
     );
@@ -671,10 +734,14 @@ class _RepeatCard extends StatelessWidget {
                             child: GestureDetector(
                               onTap: () => onToggleDay(i),
                               child: Container(
-                                margin: const EdgeInsets.symmetric(horizontal: 3),
+                                margin: const EdgeInsets.symmetric(
+                                  horizontal: 3,
+                                ),
                                 height: 42,
                                 decoration: BoxDecoration(
-                                  color: days.contains(i) ? Bg.ink : Bg.cardSoft,
+                                  color: days.contains(i)
+                                      ? Bg.ink
+                                      : Bg.cardSoft,
                                   borderRadius: BorderRadius.circular(14),
                                 ),
                                 alignment: Alignment.center,
@@ -726,7 +793,12 @@ class _ChallengeCard extends StatelessWidget {
 
   static const _kinds = [
     (ChallengeKind.math, '🧮', 'Math grind', 'Solve arithmetic at 6 a.m.'),
-    (ChallengeKind.scan, '📷', 'Object scan', 'Point the camera at real things'),
+    (
+      ChallengeKind.scan,
+      '📷',
+      'Object scan',
+      'Point the camera at real things',
+    ),
     (ChallengeKind.mix, '🔀', 'Pick at ring', 'Both options when it rings'),
   ];
 
@@ -743,7 +815,10 @@ class _ChallengeCard extends StatelessWidget {
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 160),
                 margin: const EdgeInsets.only(bottom: 10),
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 12,
+                ),
                 decoration: BoxDecoration(
                   color: kind == k.$1 ? Bg.cardSoft : Bg.bg,
                   borderRadius: BorderRadius.circular(20),
@@ -771,7 +846,10 @@ class _ChallengeCard extends StatelessWidget {
                           const SizedBox(height: 2),
                           Text(
                             k.$4,
-                            style: const TextStyle(fontSize: 11.5, color: Bg.sub),
+                            style: const TextStyle(
+                              fontSize: 11.5,
+                              color: Bg.sub,
+                            ),
                           ),
                         ],
                       ),
@@ -924,6 +1002,7 @@ class _SoundCard extends StatelessWidget {
     required this.fileLabel,
     required this.filePath,
     required this.spotifyCtrl,
+    required this.spotifyInvalid,
     required this.volume,
     required this.onTone,
     required this.onFile,
@@ -938,6 +1017,7 @@ class _SoundCard extends StatelessWidget {
   final String? fileLabel;
   final String? filePath;
   final TextEditingController spotifyCtrl;
+  final bool spotifyInvalid;
   final double volume;
   final ValueChanged<BuiltInTone> onTone;
   final VoidCallback onFile;
@@ -991,13 +1071,26 @@ class _SoundCard extends StatelessWidget {
               ),
             ],
           ),
+          if (toneKind == ToneKind.file && !ToneFiles.exists(filePath))
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Text(
+                'The selected file is missing. Pick it again, or choose '
+                'another tone, before saving.',
+                style: TextStyle(
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w700,
+                  color: Colors.white.withValues(alpha: .92),
+                ),
+              ),
+            ),
           const SizedBox(height: 10),
           _SoundTestButton(
             kind: toneKind,
             canPlay: switch (toneKind) {
               ToneKind.builtin => true,
-              ToneKind.file => filePath != null && filePath!.isNotEmpty,
-              ToneKind.spotify => true,
+              ToneKind.file => ToneFiles.exists(filePath),
+              ToneKind.spotify => isSpotifyLink(spotifyCtrl.text),
             },
             onToggle: onTest,
           ),
@@ -1044,6 +1137,20 @@ class _SoundCard extends StatelessWidget {
                             ),
                           ),
                         ),
+                        if (spotifyInvalid)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 6),
+                            child: Text(
+                              'That is not a Spotify link. In Spotify tap '
+                              'Share, then Copy link and paste it here.',
+                              style: TextStyle(
+                                fontSize: 11.5,
+                                height: 1.35,
+                                fontWeight: FontWeight.w700,
+                                color: Colors.white.withValues(alpha: .95),
+                              ),
+                            ),
+                          ),
                         const _SpotifyAccessCard(),
                         const SizedBox(height: 8),
                         Text(
@@ -1059,7 +1166,9 @@ class _SoundCard extends StatelessWidget {
                           valueListenable: spotifyCtrl,
                           builder: (context, value, _) {
                             final url = value.text.trim();
-                            if (url.isEmpty) return const SizedBox.shrink();
+                            if (!isSpotifyLink(url)) {
+                              return const SizedBox.shrink();
+                            }
                             return Padding(
                               padding: const EdgeInsets.only(top: 6),
                               child: InkWell(
@@ -1068,10 +1177,15 @@ class _SoundCard extends StatelessWidget {
                                   await launchSpotify(url, autoplay: true);
                                 },
                                 child: Padding(
-                                  padding: const EdgeInsets.symmetric(vertical: 6),
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 6,
+                                  ),
                                   child: Row(
                                     children: [
-                                      const Text('🎧', style: TextStyle(fontSize: 14)),
+                                      const Text(
+                                        '🎧',
+                                        style: TextStyle(fontSize: 14),
+                                      ),
                                       const SizedBox(width: 8),
                                       const Expanded(
                                         child: Text(
@@ -1240,12 +1354,16 @@ class _EqBarsState extends State<_EqBars> with SingleTickerProviderStateMixin {
                     padding: const EdgeInsets.symmetric(horizontal: 1.5),
                     child: Container(
                       width: 3.5,
-                      height: 7 +
+                      height:
+                          7 +
                           8 *
                               (0.5 +
-                              0.5 *
-                                  math.sin((_c.value * 2 * math.pi + i * 1.7) *
-                                      speed)).abs(),
+                                      0.5 *
+                                          math.sin(
+                                            (_c.value * 2 * math.pi + i * 1.7) *
+                                                speed,
+                                          ))
+                                  .abs(),
                       decoration: BoxDecoration(
                         color: Colors.white.withValues(alpha: .9),
                         borderRadius: BorderRadius.circular(3),
@@ -1366,8 +1484,11 @@ class _SpotifyAccessCardState extends State<_SpotifyAccessCard>
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Icon(Icons.check_circle_rounded,
-                size: 15, color: Colors.white),
+            const Icon(
+              Icons.check_circle_rounded,
+              size: 15,
+              color: Colors.white,
+            ),
             const SizedBox(width: 6),
             Expanded(
               child: Text(
@@ -1398,8 +1519,11 @@ class _SpotifyAccessCardState extends State<_SpotifyAccessCard>
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Icon(Icons.touch_app_rounded,
-                  size: 16, color: Colors.white),
+              const Icon(
+                Icons.touch_app_rounded,
+                size: 16,
+                color: Colors.white,
+              ),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
@@ -1471,14 +1595,18 @@ class _SoundTestButtonState extends State<_SoundTestButton>
   );
 
   String _label(bool playing) => switch (widget.kind) {
-        ToneKind.builtin => playing ? 'Stop preview' : 'Test this tone',
-        ToneKind.file => playing
-            ? 'Stop preview'
-            : widget.canPlay
-                ? 'Test my file'
-                : 'Pick a file first',
-        ToneKind.spotify => 'Open Spotify and play it',
-      };
+    ToneKind.builtin => playing ? 'Stop preview' : 'Test this tone',
+    ToneKind.file =>
+      playing
+          ? 'Stop preview'
+          : widget.canPlay
+          ? 'Test my file'
+          : 'Pick a file first',
+    ToneKind.spotify =>
+      widget.canPlay
+          ? 'Open Spotify and play it'
+          : 'Paste a Spotify link first',
+  };
 
   @override
   void dispose() {
@@ -1552,9 +1680,7 @@ class _SoundTestButtonState extends State<_SoundTestButton>
                               style: TextStyle(
                                 fontSize: 13,
                                 fontWeight: FontWeight.w800,
-                                color: playing
-                                    ? Colors.white
-                                    : Bg.toneBlueDeep,
+                                color: playing ? Colors.white : Bg.toneBlueDeep,
                               ),
                             ),
                           ],

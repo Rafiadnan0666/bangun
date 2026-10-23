@@ -30,7 +30,9 @@ void main() {
 
     test('legacy play.spotify.com album link', () {
       expect(
-        spotifyDeepLink('https://play.spotify.com/album/1DFixLWuPkv3KT3TnV35m3'),
+        spotifyDeepLink(
+          'https://play.spotify.com/album/1DFixLWuPkv3KT3TnV35m3',
+        ),
         'spotify:album:1DFixLWuPkv3KT3TnV35m3',
       );
     });
@@ -51,8 +53,10 @@ void main() {
         'spotify:playlist:37i9dQZF1E35NbjQoPZcmv:play',
       );
       expect(
-        spotifyDeepLink('open.spotify.com/track/4NrXzqzG8B0Bgb2ZnKGIcd',
-            forPlay: true),
+        spotifyDeepLink(
+          'open.spotify.com/track/4NrXzqzG8B0Bgb2ZnKGIcd',
+          forPlay: true,
+        ),
         'spotify:track:4NrXzqzG8B0Bgb2ZnKGIcd:play',
       );
     });
@@ -63,6 +67,65 @@ void main() {
       expect(spotifyDeepLink('   '), isNull);
       // A pathological URL that fails to parse entirely.
       expect(spotifyDeepLink('https://{bad url'), isNull);
+    });
+
+    test('lookalike hosts are rejected', () {
+      expect(
+        spotifyDeepLink('https://example.com/track/4NrXzqzG8B0Bgb2ZnKGIcd'),
+        isNull,
+      );
+      expect(
+        spotifyDeepLink(
+          'https://open.spotify.com.evil.example/track/4NrXzqzG8B0Bgb2ZnKGIcd',
+        ),
+        isNull,
+      );
+    });
+  });
+
+  group('isSpotifyLink', () {
+    test('accepts native, web, bare-host, and short links', () {
+      expect(isSpotifyLink('spotify:playlist:37i9dQZF1E35NbjQoPZcmv'), isTrue);
+      expect(
+        isSpotifyLink(
+          'https://open.spotify.com/playlist/37i9dQZF1E35NbjQoPZcmv?si=x',
+        ),
+        isTrue,
+      );
+      expect(
+        isSpotifyLink('open.spotify.com/track/4NrXzqzG8B0Bgb2ZnKGIcd'),
+        isTrue,
+      );
+      expect(isSpotifyLink('https://spotify.link/abc123'), isTrue);
+      expect(
+        isSpotifyLink('http://play.spotify.com/album/1DFixLWuPkv3KT3TnV35m3'),
+        isTrue,
+      );
+    });
+
+    test('rejects empty text, other hosts, and search pages', () {
+      expect(isSpotifyLink(''), isFalse);
+      expect(isSpotifyLink('   '), isFalse);
+      expect(isSpotifyLink('https://example.com'), isFalse);
+      expect(
+        isSpotifyLink('https://example.com/track/abcdefghijklmnop'),
+        isFalse,
+      );
+      expect(
+        isSpotifyLink('https://open.spotify.com/search/daft%20punk'),
+        isFalse,
+      );
+      expect(isSpotifyLink('not a link'), isFalse);
+      expect(isSpotifyLink('spotify:not-a-real-thing'), isFalse);
+      expect(isSpotifyLink('spotify:track:short'), isFalse);
+    });
+
+    test('accepts a native item with and without the autoplay suffix', () {
+      expect(isSpotifyLink('spotify:track:4NrXzqzG8B0Bgb2ZnKGIcd'), isTrue);
+      expect(
+        isSpotifyLink('spotify:track:4NrXzqzG8B0Bgb2ZnKGIcd:play'),
+        isTrue,
+      );
     });
   });
 }

@@ -1,0 +1,90 @@
+import 'package:bangun/data/models.dart';
+import 'package:flutter_test/flutter_test.dart';
+
+void main() {
+  group('BangunAlarm problem count', () {
+    Map<String, dynamic> json(int problems) => {
+      'id': 1,
+      'label': 'Test',
+      'hour': 7,
+      'minute': 0,
+      'mathProblems': problems,
+    };
+
+    test('defaults to three problems', () {
+      expect(BangunAlarm.fromJson(json(3)).mathProblems, 3);
+    });
+
+    test('normalizes old four-problem records to three', () {
+      expect(BangunAlarm.fromJson(json(4)).mathProblems, 3);
+    });
+
+    test('keeps and normalizes the offered counts', () {
+      expect(BangunAlarm.fromJson(json(5)).mathProblems, 5);
+      expect(BangunAlarm.fromJson(json(6)).mathProblems, 5);
+      expect(BangunAlarm.fromJson(json(7)).mathProblems, 7);
+      expect(BangunAlarm.fromJson(json(99)).mathProblems, 7);
+      expect(BangunAlarm.fromJson(json(0)).mathProblems, 3);
+    });
+  });
+
+  group('missedOneShot', () {
+    BangunAlarm alarm({
+      required DateTime createdAt,
+      RepeatMode repeatMode = RepeatMode.once,
+      int hour = 7,
+      bool enabled = true,
+    }) => BangunAlarm(
+      id: 1,
+      label: 'Test',
+      hour: hour,
+      minute: 0,
+      repeatMode: repeatMode,
+      enabled: enabled,
+      createdAt: createdAt,
+    );
+
+    final now = DateTime(2026, 10, 23, 9, 0);
+
+    test('retires a one-shot whose slot passed while the app was dead', () {
+      expect(
+        alarm(createdAt: DateTime(2026, 10, 22, 9)).missedOneShot(now),
+        isTrue,
+      );
+    });
+
+    test('keeps a one-shot created after its clock time for tomorrow', () {
+      expect(
+        alarm(createdAt: DateTime(2026, 10, 23, 9)).missedOneShot(now),
+        isFalse,
+      );
+    });
+
+    test('keeps a one-shot later today and all repeating alarms', () {
+      expect(
+        alarm(
+          createdAt: DateTime(2026, 10, 22, 9),
+          hour: 10,
+        ).missedOneShot(now),
+        isFalse,
+      );
+      expect(
+        alarm(
+          createdAt: DateTime(2026, 10, 22, 9),
+          repeatMode: RepeatMode.daily,
+        ).missedOneShot(now),
+        isFalse,
+      );
+    });
+
+    test('ignores already disabled alarms', () {
+      expect(
+        alarm(
+          createdAt: DateTime(2026, 10, 22, 9),
+          enabled: false,
+        ).missedOneShot(now),
+        isFalse,
+      );
+    });
+  });
+}

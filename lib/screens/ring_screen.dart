@@ -141,12 +141,24 @@ class _RingScreenState extends State<RingScreen>
   }
 
   bool _autoHandoffDone = false;
+  int _handoffTries = 0;
 
   Future<void> _autoSpotifyHandoff() async {
     if (_autoHandoffDone || !mounted) return;
-    final alarm = _alarm ?? context.read<AlarmRepository>().byId(widget.alarmId);
-    if (alarm == null || alarm.toneKind != ToneKind.spotify) return;
+    final alarm =
+        _alarm ?? context.read<AlarmRepository>().byId(widget.alarmId);
+    if (alarm == null) {
+      // A cold-start ring can beat the repository's SharedPreferences load.
+      // Retry briefly instead of silently skipping the Spotify handoff.
+      if (_handoffTries++ < 6) {
+        Future<void>.delayed(const Duration(milliseconds: 500), () {
+          if (mounted) _autoSpotifyHandoff();
+        });
+      }
+      return;
+    }
     _alarm = alarm;
+    if (alarm.toneKind != ToneKind.spotify) return;
     final raw = alarm.spotifyUrl?.trim() ?? '';
     if (raw.isEmpty) return;
     _autoHandoffDone = true;
@@ -154,13 +166,15 @@ class _RingScreenState extends State<RingScreen>
   }
 
   void _startChallenge(ChallengeKind gate) {
+    final alarm = _alarm;
+    if (alarm == null) return;
     HapticFeedback.mediumImpact();
     final isMathGate = gate == ChallengeKind.math;
     Navigator.of(context).pushReplacement(
       MaterialPageRoute<void>(
         builder: (_) => isMathGate
-            ? MathChallengeScreen(alarm: _alarm!, chosenKind: gate)
-            : ScanChallengeScreen(alarm: _alarm!, chosenKind: gate),
+            ? MathChallengeScreen(alarm: alarm, chosenKind: gate)
+            : ScanChallengeScreen(alarm: alarm, chosenKind: gate),
         settings: RouteSettings(name: isMathGate ? '/math' : '/scan'),
       ),
     );
@@ -168,7 +182,7 @@ class _RingScreenState extends State<RingScreen>
 
   @override
   Widget build(BuildContext context) {
-    final repo = context.read<AlarmRepository>();
+    final repo = context.watch<AlarmRepository>();
     _alarm ??= repo.byId(widget.alarmId);
     final now = DateTime.now();
 
@@ -196,7 +210,10 @@ class _RingScreenState extends State<RingScreen>
                   const Text('⏰', style: TextStyle(fontSize: 46)),
                   const SizedBox(height: 8),
                   Text(
-                    hhmm(_alarm?.hour ?? now.hour, _alarm?.minute ?? now.minute),
+                    hhmm(
+                      _alarm?.hour ?? now.hour,
+                      _alarm?.minute ?? now.minute,
+                    ),
                     style: const TextStyle(
                       fontSize: 68,
                       fontWeight: FontWeight.w900,
@@ -299,8 +316,9 @@ class _LockSheet extends StatelessWidget {
         child: const SafeArea(
           top: false,
           child: Text(
-            '⚠️ Alarm details missing — restart Bangun to clear this ring '
-            '(it keeps ringing until the gate is cleared).',
+            '⚠️ Alarm details are still loading. The ring keeps sounding '
+            'until the gate is available. Reopen Bangun if this message '
+            'stays on screen.',
             style: TextStyle(color: Bg.ink, fontSize: 13),
           ),
         ),
@@ -367,7 +385,8 @@ class _LockSheet extends StatelessWidget {
               ),
               if (scanGate) const SizedBox(height: 10),
             ],
-            if (scanGate) InkPill(icon: '📷', label: 'Scan object', onTap: onScan),
+            if (scanGate)
+              InkPill(icon: '📷', label: 'Scan object', onTap: onScan),
             if (a.toneKind == ToneKind.spotify) ...[
               const SizedBox(height: 8),
               TextButton.icon(
@@ -437,7 +456,7 @@ class _LockSheet extends StatelessWidget {
                   spotifyPlaying
                       ? 'Music runs underneath the gate.'
                       : 'The playlist starts by itself; this button retries '
-                          'the handoff.',
+                            'the handoff.',
                   textAlign: TextAlign.center,
                   style: const TextStyle(fontSize: 10.5, color: Bg.subFaint),
                 ),

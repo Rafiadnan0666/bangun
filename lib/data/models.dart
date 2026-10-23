@@ -162,8 +162,8 @@ List<String> acceptedScanLabels(String target) =>
 
 /// Union of accepted labels across a whole configured target pool.
 Set<String> acceptedScanLabelSet(Iterable<String> targets) => {
-      for (final t in targets) ...acceptedScanLabels(t),
-    };
+  for (final t in targets) ...acceptedScanLabels(t),
+};
 
 /// Maps a pasted Spotify web link to the app's native URI scheme so the
 /// ring screen can hand off *inside* the Spotify app instead of a browser.
@@ -179,8 +179,13 @@ String? spotifyDeepLink(String url, {bool forPlay = false}) {
   final trimmed = url.trim();
   if (trimmed.isEmpty) return null;
   if (trimmed.toLowerCase().startsWith('spotify:')) return trimmed;
-  final uri = Uri.tryParse(trimmed);
+  var normalized = trimmed;
+  if (!normalized.contains('://')) normalized = 'https://$normalized';
+  final uri = Uri.tryParse(normalized);
   if (uri == null) return null;
+  if (uri.scheme != 'https' && uri.scheme != 'http') return null;
+  final host = uri.host.toLowerCase();
+  if (host != 'open.spotify.com' && host != 'play.spotify.com') return null;
   const kinds = {'playlist', 'track', 'artist', 'album'};
   final segments = uri.pathSegments;
   for (var i = 0; i < segments.length - 1; i++) {
@@ -194,6 +199,50 @@ String? spotifyDeepLink(String url, {bool forPlay = false}) {
   return null;
 }
 
+/// True only for links that can actually open a Spotify item or short link.
+///
+/// Accepts native `spotify:` URIs, open.spotify.com and play.spotify.com item
+/// URLs, bare `open.spotify.com/...` paste text, and Spotify short links.
+/// This keeps a mistyped news article out of the ring-time handoff (which
+/// would otherwise open a browser behind the alarm).
+bool isSpotifyLink(String url) {
+  final trimmed = url.trim();
+  if (trimmed.isEmpty) return false;
+  final lower = trimmed.toLowerCase();
+  if (lower.startsWith('spotify:')) {
+    // Accept only the four item kinds Bangun can open. This rejects garbage
+    // native URIs such as `spotify:not-a-real-thing` before ring time.
+    return RegExp(
+      r'^spotify:(playlist|track|artist|album):[a-z0-9]{10,}(:play)?$',
+    ).hasMatch(lower);
+  }
+  var normalized = trimmed;
+  if (!normalized.contains('://')) normalized = 'https://$normalized';
+  final uri = Uri.tryParse(normalized);
+  if (uri == null) return false;
+  if (uri.scheme != 'https' && uri.scheme != 'http') return false;
+  final host = uri.host.toLowerCase();
+  if (host == 'open.spotify.com' || host == 'play.spotify.com') {
+    return spotifyDeepLink(normalized) != null;
+  }
+  if (host == 'spotify.link' ||
+      host == 'spotify.app.link' ||
+      host == 'spoti.fi') {
+    return uri.pathSegments.isNotEmpty;
+  }
+  return false;
+}
+
+/// The editor only offers 3, 5, or 7 problems. Older records defaulted to 4,
+/// which left no chip selected, so normalize anything else to the nearest
+/// allowed count.
+int _normalizeMathProblems(int? raw) {
+  if (raw == null) return 3;
+  if (raw >= 7) return 7;
+  if (raw >= 5) return 5;
+  return 3;
+}
+
 class BangunAlarm {
   BangunAlarm({
     required this.id,
@@ -204,7 +253,7 @@ class BangunAlarm {
     List<int>? days,
     this.enabled = true,
     this.challengeKind = ChallengeKind.math,
-    this.mathProblems = 4,
+    this.mathProblems = 3,
     List<String>? scanTargets,
     this.toneKind = ToneKind.builtin,
     this.tone = BuiltInTone.morningBricks,
@@ -252,6 +301,19 @@ class BangunAlarm {
         // No weekday selected (lerp guard): behave like a one-shot.
         return today.isAfter(from) ? today : today.add(const Duration(days: 1));
     }
+  }
+
+  /// True when a one-time alarm's slot has passed without being completed.
+  ///
+  /// A one-time alarm created after its clock time is intentionally set for
+  /// tomorrow (`createdAt` is later than today's slot), so that case stays
+  /// live. This prevents a missed one-shot from silently firing a day late
+  /// when the app is next opened.
+  bool missedOneShot([DateTime? now0]) {
+    if (repeatMode != RepeatMode.once || !enabled) return false;
+    final now = now0 ?? DateTime.now();
+    final slot = DateTime(now.year, now.month, now.day, hour, minute);
+    return !slot.isAfter(now) && createdAt.isBefore(slot);
   }
 
   String toneName() => switch (toneKind) {
@@ -308,7 +370,9 @@ class BangunAlarm {
         json['challengeKind'] as String?,
         ChallengeKind.math,
       ),
-      mathProblems: (json['mathProblems'] as num?)?.toInt() ?? 4,
+      mathProblems: _normalizeMathProblems(
+        (json['mathProblems'] as num?)?.toInt(),
+      ),
       scanTargets: ((json['scanTargets'] as List?) ?? const [])
           .map((e) => e as String)
           .toList(),
@@ -327,7 +391,9 @@ class BangunAlarm {
       spotifyUrl: json['spotifyUrl'] as String?,
       volume: (json['volume'] as num?)?.toDouble() ?? 0.8,
       createdAt: json['createdAt'] != null
-          ? DateTime.fromMillisecondsSinceEpoch((json['createdAt'] as num).toInt())
+          ? DateTime.fromMillisecondsSinceEpoch(
+              (json['createdAt'] as num).toInt(),
+            )
           : DateTime.now(),
     );
   }
@@ -469,7 +535,8 @@ class WakeStats {
     scanWins: (json['scanWins'] as num?)?.toInt() ?? 0,
     currentStreak: (json['currentStreak'] as num?)?.toInt() ?? 0,
     bestStreak: (json['bestStreak'] as num?)?.toInt() ?? 0,
-    winsByDay: ((json['winsByDay'] as Map<String, dynamic>?) ?? const {})
-        .map((k, v) => MapEntry(k, (v as num).toInt())),
+    winsByDay: ((json['winsByDay'] as Map<String, dynamic>?) ?? const {}).map(
+      (k, v) => MapEntry(k, (v as num).toInt()),
+    ),
   );
 }
