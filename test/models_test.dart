@@ -122,4 +122,24 @@ void main() {
       expect(record.toJson()['scanTargetsSchema'], kScanTargetsSchema);
     });
   });
+
+  group('scan challenge label', () {
+    BangunAlarm alarm(List<String> targets) => BangunAlarm(
+      id: 1,
+      label: 'Test',
+      hour: 7,
+      minute: 0,
+      challengeKind: ChallengeKind.scan,
+      scanTargets: targets,
+      createdAt: DateTime(2026, 10, 23),
+    );
+
+    test('names a single target but hides a randomized pool', () {
+      expect(alarm(['cup']).challengeLabel(), contains('cup'));
+      expect(
+        alarm(kDefaultScanTargets).challengeLabel(),
+        contains('random object'),
+      );
+    });
+  });
 }

@@ -206,11 +206,6 @@ const kSimilarScanTargets = <String, List<String>>{
 List<String> acceptedScanLabels(String target) =>
     kSimilarScanTargets[target] ?? [target];
 
-/// Union of accepted labels across a whole configured target pool.
-Set<String> acceptedScanLabelSet(Iterable<String> targets) => {
-  for (final t in targets) ...acceptedScanLabels(t),
-};
-
 /// Maps a pasted Spotify web link to the app's native URI scheme so the
 /// ring screen can hand off *inside* the Spotify app instead of a browser.
 ///
@@ -370,7 +365,8 @@ class BangunAlarm {
 
   String challengeLabel() => switch (challengeKind) {
     ChallengeKind.math => '🧮 Math × $mathProblems',
-    ChallengeKind.scan => '📷 Scan ${scanTargets.firstOrNull ?? "object"}',
+    ChallengeKind.scan =>
+      '📷 Scan ${scanTargets.length == 1 ? scanTargets.first : "random object"}',
     ChallengeKind.mix => '🔀 Pick at ring',
   };
 

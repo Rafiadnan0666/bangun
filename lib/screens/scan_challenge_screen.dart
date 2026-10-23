@@ -251,7 +251,7 @@ class _ScanChallengeScreenState extends State<ScanChallengeScreen>
   }
 
   // Temporal gate: matched frames accrue presence time (capped at _holdMs),
-  // misses decay at double speed, so merely waving the camera around fails.
+  // misses decay at 1.25x speed, so merely waving the camera around fails.
   void _applySession(bool matched, String? label, double score, int dtMs) {
     if (matched) {
       _matchedLabel = label;

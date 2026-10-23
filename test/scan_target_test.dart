@@ -96,22 +96,6 @@ void main() {
     test('unknown target degrades to itself only', () {
       expect(acceptedScanLabels('person'), ['person']);
     });
-
-    test('pool acceptance unions every configured target', () {
-      final accepted = acceptedScanLabelSet(['glass', 'screen']);
-      expect(
-        accepted,
-        containsAll([
-          'cup',
-          'wine glass',
-          'bottle',
-          'tv',
-          'laptop',
-          'cell phone',
-        ]),
-      );
-      expect(accepted, isNot(contains('book')));
-    });
   });
 
   group('targetEmoji', () {
