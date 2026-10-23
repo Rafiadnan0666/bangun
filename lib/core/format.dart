@@ -10,10 +10,7 @@ String two(int n) => n.toString().padLeft(2, '0');
 String hhmm(int hour, int minute) => '${two(hour)}:${two(minute)}';
 
 /// Repeat label, e.g. `Every day` / `Mon Tue Sat` / `Once`.
-String repeatLabel({
-  required bool daily,
-  required List<int> days,
-}) {
+String repeatLabel({required bool daily, required List<int> days}) {
   if (days.isEmpty) return 'Once';
   if (days.length == 7) return 'Every day';
   if (daily && days.length == 7) return 'Every day';
@@ -121,4 +118,11 @@ const kTargetEmoji = {
   'toothbrush': '🪥',
 };
 
-String targetEmoji(String label) => kTargetEmoji[label] ?? '🎯';
+String _targetEmojiAlias(String label) => switch (label) {
+  'glass' => 'wine glass',
+  'screen' => 'tv',
+  _ => label,
+};
+
+String targetEmoji(String label) =>
+    kTargetEmoji[_targetEmojiAlias(label)] ?? '🎯';

@@ -72,6 +72,9 @@ class AlarmRepository extends ChangeNotifier {
   /// Loads state, asks for runtime permissions, re-syncs everything into the
   /// plugin, and warms the detector. Called once after `Alarm.init()`.
   Future<void> boot() async {
+    // Start the model warm-up before touching preferences or the alarm plugin.
+    // A storage/plugin failure must not leave the scan gate unable to load.
+    unawaited(_warmDetector());
     _prefs = await SharedPreferences.getInstance();
     _load();
 
@@ -100,9 +103,17 @@ class AlarmRepository extends ChangeNotifier {
     final ringing = Alarm.ringing.value.alarms.isNotEmpty;
     if (!ringing) unawaited(_requestRuntimePermissions());
     await _syncAllToPlugin();
-    unawaited(CocoDetector.I.load());
     unawaited(ToneFiles.sweepOrphans([for (final a in _alarms) a.filePath]));
     notifyListeners();
+  }
+
+  Future<void> _warmDetector() async {
+    try {
+      await CocoDetector.I.load();
+    } on Object catch (e) {
+      // The scan screen shows a retry card; boot must keep going.
+      debugPrint('detector warm-up failed: $e');
+    }
   }
 
   Future<void> _requestRuntimePermissions() async {

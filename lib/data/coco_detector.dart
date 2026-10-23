@@ -47,12 +47,13 @@ class CocoDetector {
       'assets/models/coco_ssd_mobilenet_v1_1.0_quant.tflite';
   static const labelsAsset = 'assets/models/labels.txt';
 
-  static const double minScore = 0.5;
+  static const double minScore = 0.4;
 
   Interpreter? _interpreter;
   List<String> _labels = const [];
   bool _loaded = false;
   Future<void>? _loading;
+  Object? _loadError;
 
   List<List<List<double>>> _boxes = const [];
   List<List<double>> _classes = const [];
@@ -64,13 +65,26 @@ class CocoDetector {
 
   bool get isReady => _loaded && _interpreter != null;
 
-  /// Loads model + labels once. Safe to call repeatedly.
+  /// The last load failure, if any. A failed load leaves [isReady] false and
+  /// clears the in-flight future so [load] can be retried.
+  Object? get loadError => _loadError;
+
+  /// Loads model + labels once. Safe to call repeatedly. On failure the
+  /// in-flight future is cleared so a later call can retry; the error is
+  /// rethrown so the scan screen can show a retry card.
   Future<void> load() {
     if (isReady) return Future.value();
-    return _loading ??= _loadNow();
+    final pending = _loading;
+    if (pending != null) return pending;
+    final future = _loadNow();
+    _loading = future;
+    return future.whenComplete(() {
+      if (identical(_loading, future)) _loading = null;
+    });
   }
 
   Future<void> _loadNow() async {
+    _loadError = null;
     try {
       final raw = await rootBundle.loadString(labelsAsset);
       _labels = raw
@@ -97,9 +111,7 @@ class CocoDetector {
           ? out[0].shape[1]
           : 10;
 
-      _boxes = [
-        List.generate(_maxDet, (_) => List.filled(4, 0.0)),
-      ];
+      _boxes = [List.generate(_maxDet, (_) => List.filled(4, 0.0))];
       _classes = [List.filled(_maxDet, 0.0)];
       _scores = [List.filled(_maxDet, 0.0)];
       _count = [0.0];
@@ -115,7 +127,9 @@ class CocoDetector {
         'input ${_inputSize}x$_inputSize, maxDet $_maxDet',
       );
     } catch (e) {
+      _loadError = e;
       debugPrint('CocoDetector load failed: $e');
+      rethrow;
     }
   }
 
@@ -159,6 +173,7 @@ class CocoDetector {
     _interpreter = null;
     _loaded = false;
     _loading = null;
+    _loadError = null;
   }
 }
 

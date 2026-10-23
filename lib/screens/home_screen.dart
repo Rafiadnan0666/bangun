@@ -43,7 +43,7 @@ class _HomeScreenState extends State<HomeScreen> {
     minute: (DateTime.now().minute + 1) % 60,
     challengeKind: kind,
     mathProblems: 3,
-    scanTargets: const ['cup'],
+    scanTargets: kTrialScanTargets,
     createdAt: DateTime.now(),
   );
 

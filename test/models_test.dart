@@ -87,4 +87,39 @@ void main() {
       );
     });
   });
+
+  group('scan target migration', () {
+    Map<String, dynamic> json({List<String>? targets, int? schema}) => {
+      'id': 1,
+      'label': 'Test',
+      'hour': 7,
+      'minute': 0,
+      'scanTargets': targets,
+      'scanTargetsSchema': schema,
+    };
+
+    test('missing targets use the broad common default', () {
+      final target = BangunAlarm.fromJson(json()).scanTargets;
+      expect(target, kDefaultScanTargets);
+    });
+
+    test('old cup-only records expand once to the default pool', () {
+      final target = BangunAlarm.fromJson(json(targets: ['cup'])).scanTargets;
+      expect(target, kDefaultScanTargets);
+    });
+
+    test('new cup-only records keep the deliberate choice', () {
+      final target = BangunAlarm.fromJson(
+        json(targets: ['cup'], schema: kScanTargetsSchema),
+      ).scanTargets;
+      expect(target, ['cup']);
+    });
+
+    test('records write the schema version', () {
+      final record = BangunAlarm.fromJson(
+        json(targets: ['book'], schema: kScanTargetsSchema),
+      );
+      expect(record.toJson()['scanTargetsSchema'], kScanTargetsSchema);
+    });
+  });
 }

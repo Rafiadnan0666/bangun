@@ -36,6 +36,8 @@ enum BuiltInTone {
 /// Named subset of the COCO-90 label map that makes sense as a
 /// "show me this object" gate (unnamed `???` classes are excluded).
 const kPickableTargets = [
+  'glass',
+  'screen',
   'cup',
   'bottle',
   'book',
@@ -91,11 +93,52 @@ const kPickableTargets = [
   'boat',
 ];
 
-/// Targets COCO-SSD reliably finds on a normal bedroom/desk at 3am —
+/// Default pool for new scan alarms. These are common objects in a bedroom,
+/// desk, or living room. `glass` and `screen` are composite targets: the
+/// detector reports their concrete COCO labels, and the similarity map below
+/// makes those labels count.
+const kDefaultScanTargets = <String>[
+  'glass',
+  'screen',
+  'book',
+  'cell phone',
+  'remote',
+  'chair',
+  'couch',
+  'bed',
+  'potted plant',
+  'backpack',
+  'bowl',
+  'keyboard',
+  'mouse',
+];
+
+/// Pool used by the home-screen trial scan. Slightly smaller than the alarm
+/// default so repeated trial runs cycle through familiar objects quickly.
+const kTrialScanTargets = <String>[
+  'glass',
+  'screen',
+  'book',
+  'cell phone',
+  'remote',
+  'chair',
+  'bed',
+];
+
+/// Schema version written with alarm records. Version 1 written by older
+/// builds defaulted every scan alarm to a cup-only pool. Version 2 expands
+/// that old default once; a user who deliberately re-selects only a cup keeps
+/// it because new records carry this version.
+const kScanTargetsSchema = 2;
+
+/// Targets COCO-SSD reliably finds on a normal bedroom/desk at 3am -
 /// everyday objects a person will be forced to actually see up close.
 /// The gate picks these first; genuinely rare finds remain an optional
 /// fallback for alarms without any easy target.
 const kEasyScanTargets = {
+  'glass',
+  'screen',
+  'wine glass',
   'cup',
   'bottle',
   'book',
@@ -119,14 +162,15 @@ const kEasyScanTargets = {
 
 /// Chooses the scan-gate target from an alarm's configured pool.
 ///
-/// * Trial runs always ask for a cup (deterministic smoke-test/UX path).
-/// * Rings prioritize the easiest configured object; a hard-to-find object is
-///   only used when the pool has nothing easy on it.
+/// Both trial and ring runs pick randomly. Familiar, easy objects are picked
+/// first; a hard-to-find object is only used when the pool has nothing easy.
+/// The trial alarm supplies [kTrialScanTargets]; normal alarms use their
+/// configured pool, which defaults to [kDefaultScanTargets].
 String pickScanTarget(List<String> pool, {bool isTrial = false}) {
-  if (pool.isEmpty) return 'cup';
-  if (isTrial) return pool.contains('cup') ? 'cup' : pool.first;
-  final easy = pool.where(kEasyScanTargets.contains).toList();
-  final source = easy.isNotEmpty ? easy : pool;
+  final fallback = isTrial ? kTrialScanTargets : kDefaultScanTargets;
+  final configured = pool.isEmpty ? fallback : pool;
+  final easy = configured.where(kEasyScanTargets.contains).toList();
+  final source = easy.isNotEmpty ? easy : configured;
   return source[math.Random().nextInt(source.length)];
 }
 
@@ -137,6 +181,8 @@ String pickScanTarget(List<String> pool, {bool isTrial = false}) {
 /// side. When the gate asks for one thing it accepts these near-miss labels
 /// too, so the ring never fails over a taxonomy technicality.
 const kSimilarScanTargets = <String, List<String>>{
+  'glass': ['cup', 'wine glass', 'bottle'],
+  'screen': ['tv', 'laptop', 'cell phone'],
   'cup': ['cup', 'wine glass', 'bottle'],
   'wine glass': ['wine glass', 'cup', 'bottle'],
   'bottle': ['bottle', 'cup', 'wine glass'],
@@ -263,7 +309,7 @@ class BangunAlarm {
     this.volume = 0.8,
     required this.createdAt,
   }) : days = days ?? const [1, 2, 3, 4, 5, 6, 7],
-       scanTargets = scanTargets ?? const [];
+       scanTargets = scanTargets ?? kDefaultScanTargets;
 
   final int id;
   final String label;
@@ -339,6 +385,7 @@ class BangunAlarm {
     'challengeKind': challengeKind.name,
     'mathProblems': mathProblems,
     'scanTargets': scanTargets,
+    'scanTargetsSchema': kScanTargetsSchema,
     'toneKind': toneKind.name,
     'tone': tone.name,
     'filePath': filePath,
@@ -351,6 +398,17 @@ class BangunAlarm {
   factory BangunAlarm.fromJson(Map<String, dynamic> json) {
     T named<T extends Enum>(List<T> values, String? name, T fallback) =>
         values.firstWhereOrNull((v) => v.name == name) ?? fallback;
+    final rawTargets = ((json['scanTargets'] as List?) ?? const [])
+        .map((e) => e as String)
+        .toList();
+    final schema = (json['scanTargetsSchema'] as num?)?.toInt() ?? 1;
+    final scanTargets = rawTargets.isEmpty
+        ? kDefaultScanTargets
+        : schema < kScanTargetsSchema &&
+              rawTargets.length == 1 &&
+              rawTargets.first == 'cup'
+        ? kDefaultScanTargets
+        : rawTargets;
     return BangunAlarm(
       id: (json['id'] as num).toInt(),
       label: json['label'] as String? ?? 'Alarm',
@@ -373,9 +431,7 @@ class BangunAlarm {
       mathProblems: _normalizeMathProblems(
         (json['mathProblems'] as num?)?.toInt(),
       ),
-      scanTargets: ((json['scanTargets'] as List?) ?? const [])
-          .map((e) => e as String)
-          .toList(),
+      scanTargets: scanTargets,
       toneKind: named(
         ToneKind.values,
         json['toneKind'] as String?,

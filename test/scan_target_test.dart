@@ -1,18 +1,49 @@
+import 'package:bangun/core/format.dart';
 import 'package:bangun/data/models.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  group('scan target pools', () {
+    test('default pool is common and fully easy', () {
+      expect(kDefaultScanTargets, containsAll(['glass', 'screen', 'book']));
+      expect(kDefaultScanTargets, contains('cell phone'));
+      expect(kDefaultScanTargets.every(kEasyScanTargets.contains), isTrue);
+    });
+
+    test('trial pool is common and fully easy', () {
+      expect(kTrialScanTargets, containsAll(['glass', 'screen']));
+      expect(kTrialScanTargets.every(kEasyScanTargets.contains), isTrue);
+    });
+
+    test('every default target is selectable in the editor', () {
+      for (final target in kDefaultScanTargets) {
+        expect(kPickableTargets, contains(target));
+      }
+    });
+  });
+
   group('pickScanTarget', () {
-    test('trial always asks for the cup', () {
-      expect(
-        pickScanTarget(['cup'], isTrial: true),
-        'cup',
-      );
-      expect(
-        // Trial pools without a cup fall back to the first configured item.
-        pickScanTarget(['bottle', 'scissors'], isTrial: true),
-        'bottle',
-      );
+    test('trial runs randomize across the trial pool', () {
+      final picks = <String>{};
+      for (var i = 0; i < 80; i++) {
+        picks.add(pickScanTarget(kTrialScanTargets, isTrial: true));
+      }
+      expect(picks.length, greaterThan(1));
+      expect(kTrialScanTargets.toSet().containsAll(picks), isTrue);
+    });
+
+    test('a single-item trial pool stays deterministic', () {
+      expect(pickScanTarget(['cup'], isTrial: true), 'cup');
+    });
+
+    test('rings randomize among multiple easy objects', () {
+      final pool = ['cup', 'book', 'cell phone', 'glass'];
+      final picks = <String>{};
+      for (var i = 0; i < 80; i++) {
+        picks.add(pickScanTarget(pool));
+      }
+      expect(picks.length, greaterThan(1));
+      expect(pool.toSet().containsAll(picks), isTrue);
     });
 
     test('rings prefer the easiest configured object', () {
@@ -29,8 +60,13 @@ void main() {
       }
     });
 
-    test('empty pool degrades to cup', () {
-      expect(pickScanTarget(const []), 'cup');
+    test('empty pool uses the randomized default pool', () {
+      final picks = <String>{};
+      for (var i = 0; i < 80; i++) {
+        picks.add(pickScanTarget(const []));
+      }
+      expect(kDefaultScanTargets.toSet().containsAll(picks), isTrue);
+      expect(picks.length, greaterThan(1));
     });
   });
 
@@ -38,11 +74,23 @@ void main() {
     test('shape-confusable labels count toward a cup', () {
       final accepted = acceptedScanLabels('cup');
       for (final label in ['cup', 'wine glass', 'bottle']) {
-        expect(accepted.contains(label), isTrue, reason: 'cup ↔ $label');
+        expect(accepted.contains(label), isTrue, reason: 'cup -> $label');
       }
       // Unrelated labels must not sneak in.
       expect(accepted.contains('person'), isFalse);
       expect(accepted.contains('scissors'), isFalse);
+    });
+
+    test('a glass target accepts cup, wine glass, and bottle', () {
+      final accepted = acceptedScanLabels('glass');
+      expect(accepted, containsAll(['cup', 'wine glass', 'bottle']));
+      expect(accepted.contains('book'), isFalse);
+    });
+
+    test('a screen target accepts tv, laptop, and phone', () {
+      final accepted = acceptedScanLabels('screen');
+      expect(accepted, containsAll(['tv', 'laptop', 'cell phone']));
+      expect(accepted.contains('glass'), isFalse);
     });
 
     test('unknown target degrades to itself only', () {
@@ -50,10 +98,26 @@ void main() {
     });
 
     test('pool acceptance unions every configured target', () {
-      final accepted = acceptedScanLabelSet(['scissors', 'mouse']);
-      // mouse pulls remote in; scissors pulls nothing foreign.
-      expect(accepted, containsAll(['scissors', 'mouse', 'remote']));
-      expect(accepted, isNot(contains('cup')));
+      final accepted = acceptedScanLabelSet(['glass', 'screen']);
+      expect(
+        accepted,
+        containsAll([
+          'cup',
+          'wine glass',
+          'bottle',
+          'tv',
+          'laptop',
+          'cell phone',
+        ]),
+      );
+      expect(accepted, isNot(contains('book')));
+    });
+  });
+
+  group('targetEmoji', () {
+    test('composite targets inherit a familiar emoji', () {
+      expect(targetEmoji('glass'), targetEmoji('wine glass'));
+      expect(targetEmoji('screen'), targetEmoji('tv'));
     });
   });
 }

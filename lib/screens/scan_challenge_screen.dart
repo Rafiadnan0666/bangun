@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:camera/camera.dart';
@@ -46,6 +47,9 @@ class _ScanChallengeScreenState extends State<ScanChallengeScreen>
   bool _finishing = false;
   int _frameW = 0;
   int _frameH = 0;
+  bool _detectorLoading = false;
+  String? _detectorError;
+  int _detectErrors = 0;
 
   late final Set<String> _accepted;
   late final String _target;
@@ -58,14 +62,58 @@ class _ScanChallengeScreenState extends State<ScanChallengeScreen>
     WidgetsBinding.instance.addObserver(this);
     final pool = widget.alarm.scanTargets.isNotEmpty
         ? widget.alarm.scanTargets
-        : const ['cup'];
-    // Near-miss labels stay fair game. See [kSimilarScanTargets].
-    _accepted = acceptedScanLabelSet(pool);
+        : kDefaultScanTargets;
     _target = pickScanTarget(pool, isTrial: _isTrial);
+    // Accept shape-confusable labels for the chosen target only. The rest of
+    // the configured pool is not silently accepted, or a broad default pool
+    // would turn "show me a glass" into "show me anything in the room".
+    _accepted = acceptedScanLabels(_target).toSet();
     if (kDebugMode) {
       debugPrint('SCAN target: $_target (pool=$pool)');
     }
     _bootstrap();
+    unawaited(_ensureDetector());
+  }
+
+  /// Loads the on-device detector on demand. The alarm repository warms it at
+  /// boot, but a cold start, a release-only plugin failure, or an interrupted
+  /// first load must not leave the scan screen silently stuck at 0%.
+  Future<void> _ensureDetector() async {
+    if (CocoDetector.I.isReady) {
+      if (mounted) {
+        setState(() {
+          _detectorLoading = false;
+          _detectorError = null;
+        });
+      }
+      return;
+    }
+    if (_detectorLoading) return;
+    if (mounted) {
+      setState(() {
+        _detectorLoading = true;
+        _detectorError = null;
+      });
+    }
+    try {
+      await CocoDetector.I.load();
+    } on Object catch (e) {
+      debugPrint('detector retry failed: $e');
+    }
+    if (!mounted) return;
+    setState(() {
+      _detectorLoading = false;
+      _detectorError = CocoDetector.I.isReady
+          ? null
+          : CocoDetector.I.loadError?.toString() ??
+                'The on-device model did not load.';
+    });
+  }
+
+  Future<void> _retryDetector() async {
+    if (CocoDetector.I.isReady) CocoDetector.I.dispose();
+    _detectErrors = 0;
+    await _ensureDetector();
   }
 
   @override
@@ -171,6 +219,7 @@ class _ScanChallengeScreenState extends State<ScanChallengeScreen>
       );
       final dets = det.detect(rgb);
       _detections = dets;
+      _detectErrors = 0;
 
       final hit = dets
           .where((d) => _accepted.contains(d.label))
@@ -190,6 +239,12 @@ class _ScanChallengeScreenState extends State<ScanChallengeScreen>
       if (mounted) setState(() {});
     } on Exception catch (e) {
       debugPrint('detect failed: $e');
+      _detectErrors++;
+      if (_detectErrors >= 3 && mounted) {
+        setState(() {
+          _detectorError = 'Live detection failed repeatedly. Retry the AI.';
+        });
+      }
     } finally {
       _busy = false;
     }
@@ -205,7 +260,7 @@ class _ScanChallengeScreenState extends State<ScanChallengeScreen>
         _progress + (dtMs / _holdMs) * math.min(1.0, 0.4 + score),
       );
     } else {
-      _progress = math.max(0.0, _progress - (dtMs / _holdMs) * 2);
+      _progress = math.max(0.0, _progress - (dtMs / _holdMs) * 1.25);
     }
   }
 
@@ -304,6 +359,16 @@ class _ScanChallengeScreenState extends State<ScanChallengeScreen>
                   controllerRetry();
                 },
               )
+            else if (_detectorError != null)
+              _MessageCard(
+                icon: 'AI',
+                title: 'On-device AI failed',
+                body: '${_detectorError!}\n\nRetry the object detector.',
+                actionLabel: 'Retry AI',
+                onAction: () {
+                  unawaited(_retryDetector());
+                },
+              )
             else ...[
               _ScanHud(
                 target: _target,
@@ -313,6 +378,7 @@ class _ScanChallengeScreenState extends State<ScanChallengeScreen>
                 accepted: _accepted,
                 holdMs: _holdMs,
                 isTrial: _isTrial,
+                detectorLoading: _detectorLoading,
               ),
             ],
           ],
@@ -336,6 +402,7 @@ class _ScanHud extends StatelessWidget {
     required this.accepted,
     required this.holdMs,
     required this.isTrial,
+    required this.detectorLoading,
   });
 
   final String target;
@@ -345,6 +412,7 @@ class _ScanHud extends StatelessWidget {
   final Set<String> accepted;
   final int holdMs;
   final bool isTrial;
+  final bool detectorLoading;
 
   @override
   Widget build(BuildContext context) {
@@ -447,7 +515,9 @@ class _ScanHud extends StatelessWidget {
                 ),
                 const SizedBox(height: 10),
                 Text(
-                  progress >= 1
+                  detectorLoading
+                      ? 'Loading on-device AI...'
+                      : progress >= 1
                       ? 'got it!'
                       : matchedLabel == null
                       ? 'Find the $target and hold it in frame'

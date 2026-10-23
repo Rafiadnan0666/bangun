@@ -67,7 +67,8 @@ again.
    7) with increasing difficulty. A wrong answer resets the current problem.
    The gate clears only after every problem is solved.
 7. **Scan gate.** Bangun asks for a random easy object from the configured
-   pool. The camera preview runs COCO-SSD at roughly 9 frames per second.
+   pool; trial runs randomize too. The camera preview runs COCO-SSD at roughly
+   9 frames per second.
    Detection boxes and labels are drawn on the preview. Holding the correct
    object for 3 continuous seconds clears the gate.
 8. **Stop.** The success handler calls `Alarm.stop()`. The native sound stops,
@@ -152,7 +153,7 @@ problem on screen until it is solved. There is no timer and no skip button.
 
 The scan screen opens the camera, loads the on-device detector, and asks for
 one object. A matched detection draws a box and a label. A hold meter fills
-while the target stays visible and drains twice as fast when it disappears.
+while the target stays visible and drains at 1.25 times speed when it disappears.
 The gate clears at a continuous 3-second hold. If the camera is unavailable,
 the screen reports the problem instead of pretending the gate passed.
 
@@ -275,15 +276,24 @@ generated problems.
   rectangle and a small label pill over the live preview. The box turns green
   when the label counts toward the gate.
 - Synonyms: the COCO model has 90 coarse classes, so the gate uses a similarity
-  map. Asking for a cup also accepts a wine glass, bottle, or bowl. The map is
-  `kSimilarScanTargets` in `lib/data/models.dart`.
-- Target choice: the pool is randomized but favors easy objects that are
-  normally nearby, such as a cup, a phone, or a book. Harder classes are only
-  used as fallback.
+  map. Asking for a cup accepts a wine glass or bottle. The `glass`
+  target accepts cup, wine glass, and bottle. The `screen` target accepts tv,
+  laptop, and cell phone. The map is `kSimilarScanTargets` in
+  `lib/data/models.dart`.
+- Target choice: new alarms start with a broad pool of common room objects.
+  Both trial runs and normal alarms randomize the target, preferring easy
+  objects that are normally nearby, such as a glass, a screen, a phone, or a
+  book. Harder classes are only used as fallback. Old cup-only records are
+  expanded once to the common pool; a deliberate cup-only choice made after
+  this update is kept.
+- Loading: the scan screen loads the detector on demand and retries if the
+  first load fails. It shows a loading line and a retry card instead of sitting
+  silently at 0 percent.
 - Meter: the 100 percent meter measures hold time, not model confidence. A
   matching frame adds presence weighted by score (`0.4 + score`), a miss decays
-  twice as fast, and a single frame can add at most 400 milliseconds. The gate
-  clears at a continuous 3-second hold.
+  at 1.25 times speed, and a single frame can add at most 400 milliseconds. The
+  gate clears at a continuous 3-second hold. Detections at 0.40 confidence or
+  higher count.
 
 ---
 
@@ -331,14 +341,23 @@ flutter pub get
 flutter test
 flutter analyze
 flutter build apk --debug
+flutter build apk --release
 ```
 
 The debug APK is written to `build/app/outputs/flutter-apk/app-debug.apk`.
-Install it with:
+The release APK is written to `build/app/outputs/flutter-apk/app-release.apk`.
+Install either one with:
 
 ```bash
 adb install -r build/app/outputs/flutter-apk/app-debug.apk
+adb install -r build/app/outputs/flutter-apk/app-release.apk
 ```
+
+Release builds apply `android/app/proguard-rules.pro`. Those rules keep the
+Kotlin runtime and the Pigeon JNI registrars used by `shared_preferences_android`
+2.5.x. Without them, R8 renames `kotlin.coroutines.Continuation` and removes
+`kotlin.Result`, so the release app throws from `Alarm.init()` and never loads
+the scan model.
 
 To regenerate the built-in ring tones after editing the generator:
 
@@ -346,10 +365,11 @@ To regenerate the built-in ring tones after editing the generator:
 dart tools/gen_sounds.dart
 ```
 
-The test suite currently has 40 tests covering the math engine, scan geometry,
-scan target selection, Spotify link validation, alarm model normalization, and
-missed one-time alarm handling. `flutter analyze` must report no issues.
-The debug APK build is also part of the verification pass.
+The test suite currently has 52 tests covering the math engine, scan geometry,
+scan target selection and migration, Spotify link validation, alarm model
+normalization, and missed one-time alarm handling. `flutter analyze` must
+report no issues. Debug and release APK builds are also part of the verification
+pass.
 
 ---
 
@@ -433,9 +453,22 @@ The highest-impact ones are fixed in this version.
   It is cancelled when MainActivity resumes.
 - Exact alarm state was not visible in the app. The reliability card now
   checks it and offers the correct settings action.
+- Release builds were broken at startup. R8 renamed
+  `kotlin.coroutines.Continuation` and removed `kotlin.Result`, which broke the
+  Pigeon JNI lookups inside `shared_preferences_android` 2.5.x. `Alarm.init()`
+  threw and boot stopped before the scan model loaded. `proguard-rules.pro` now
+  keeps the Kotlin runtime and the JNI registrars. A release smoke test shows
+  no `Alarm.init` failure and logs `CocoDetector ready`.
+- Scan targets were effectively hard-coded to cup: the trial pool and editor
+  default were cup-only, and the picker hid everything after the first 28
+  entries. New alarms get the broad common-object pool, trials randomize on
+  every run, old cup-only records migrate once, and every target is selectable.
+- The scan gate could stay at 0 percent with no explanation when the model did
+  not load. It now loads and retries the detector on demand, shows loading and
+  failure states, accepts class scores from 0.40, and decays misses more gently.
 
-Verification for this pass: `flutter analyze` reports no issues, 40 tests pass,
-and the debug APK builds successfully.
+Verification for this pass: `flutter analyze` reports no issues, 52 tests pass,
+and the debug and release APKs build successfully.
 
 ---
 
@@ -443,7 +476,7 @@ and the debug APK builds successfully.
 
 - The scan gate only knows the 90 COCO classes. A very specific branded object
   is outside the model. Pick a nearby class; the synonym map covers close
-  variants such as cup, glass, mug, bottle, and bowl.
+  variants such as cup, wine glass, bottle, bowl, tv, laptop, and cell phone.
 - Detection quality in the dark, at extreme angles, or on reflective surfaces
   is unmeasured. The hold meter is intentionally forgiving, but this is not a
   scientific benchmark. The paper discusses this threat to validity.

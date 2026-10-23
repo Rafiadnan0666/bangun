@@ -64,7 +64,11 @@ class _BangunAppState extends State<BangunApp> with WidgetsBindingObserver {
 
   Future<void> _bootRepository() async {
     final repo = context.read<AlarmRepository>();
-    await repo.boot();
+    try {
+      await repo.boot();
+    } on Object catch (e, st) {
+      debugPrint('repository boot failed: $e\n$st');
+    }
     // Cold-start ring: the BehaviorSubject replays current ringing state.
     if (mounted) _routeRing(Alarm.ringing.value);
   }

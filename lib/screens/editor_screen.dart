@@ -66,7 +66,7 @@ class _EditorScreenState extends State<EditorScreen> {
     _days = a == null ? {1, 2, 3, 4, 5, 6, 7} : a.days.toSet();
     _kind = a?.challengeKind ?? ChallengeKind.math;
     _problems = a?.mathProblems ?? 3;
-    _targets = a?.scanTargets.toSet() ?? {'cup'};
+    _targets = a?.scanTargets.toSet() ?? kDefaultScanTargets.toSet();
     _toneKind = a?.toneKind ?? ToneKind.builtin;
     _tone = a?.tone ?? BuiltInTone.morningBricks;
     _filePath = a?.filePath;
@@ -967,7 +967,7 @@ class _TargetPicker extends StatelessWidget {
             spacing: 8,
             runSpacing: 8,
             children: [
-              for (final t in pool.take(28))
+              for (final t in pool)
                 EmojiChip(
                   emoji: targetEmoji(t),
                   label: t,
