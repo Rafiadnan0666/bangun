@@ -56,6 +56,19 @@ class _ScanChallengeScreenState extends State<ScanChallengeScreen>
 
   bool get _isTrial => widget.alarm.id == trialAlarmId;
 
+  /// Keep the overlay quiet without letting non-target boxes push a real hit
+  /// out of view. Accepted labels always rank first, then confidence.
+  List<Detection> get _displayDetections {
+    final ranked = List<Detection>.of(_detections);
+    ranked.sort((a, b) {
+      final aHit = _accepted.contains(a.label);
+      final bHit = _accepted.contains(b.label);
+      if (aHit != bHit) return aHit ? -1 : 1;
+      return b.score.compareTo(a.score);
+    });
+    return ranked.take(CocoDetector.maxDetections).toList(growable: false);
+  }
+
   @override
   void initState() {
     super.initState();
@@ -321,7 +334,7 @@ class _ScanChallengeScreenState extends State<ScanChallengeScreen>
                 _frameW > 0)
               Positioned.fill(
                 child: _DetectionBoxes(
-                  detections: _detections,
+                  detections: _displayDetections,
                   accepted: _accepted,
                   frameWidth: _frameW,
                   frameHeight: _frameH,
@@ -373,7 +386,7 @@ class _ScanChallengeScreenState extends State<ScanChallengeScreen>
               _ScanHud(
                 target: _target,
                 progress: _progress,
-                detections: _detections,
+                detections: _displayDetections,
                 matchedLabel: _matchedLabel,
                 accepted: _accepted,
                 holdMs: _holdMs,
@@ -416,10 +429,10 @@ class _ScanHud extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final chips = detections.take(3).toList(growable: false);
+    final chips = detections.take(2).toList(growable: false);
     return SafeArea(
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 14, 16, 20),
+        padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
         child: Column(
           children: [
             Container(
@@ -479,81 +492,107 @@ class _ScanHud extends StatelessWidget {
                 ],
               ),
             ),
-            const Spacer(),
-            Column(
-              children: [
-                SizedBox(
-                  width: 132,
-                  height: 132,
-                  child: Stack(
-                    alignment: Alignment.center,
-                    children: [
-                      SizedBox(
-                        width: 132,
-                        height: 132,
-                        child: CircularProgressIndicator(
-                          value: progress,
-                          strokeWidth: 9,
-                          strokeCap: StrokeCap.round,
-                          backgroundColor: Colors.white30,
-                          valueColor: AlwaysStoppedAnimation(
-                            progress >= 1 ? Bg.success : Bg.ctaB,
+            Expanded(
+              child: LayoutBuilder(
+                builder: (context, constraints) => SingleChildScrollView(
+                  physics: const ClampingScrollPhysics(),
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(
+                      minHeight: constraints.maxHeight,
+                    ),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        TweenAnimationBuilder<double>(
+                          tween: Tween(begin: 0, end: progress),
+                          duration: const Duration(milliseconds: 120),
+                          curve: Curves.easeOutCubic,
+                          builder: (context, value, _) {
+                            final meter = math
+                                .min(132.0, constraints.maxHeight * 0.32)
+                                .clamp(96.0, 132.0)
+                                .toDouble();
+                            return SizedBox(
+                              width: meter,
+                              height: meter,
+                              child: Stack(
+                                alignment: Alignment.center,
+                                children: [
+                                  SizedBox(
+                                    width: meter,
+                                    height: meter,
+                                    child: CircularProgressIndicator(
+                                      value: value,
+                                      strokeWidth: 9,
+                                      strokeCap: StrokeCap.round,
+                                      backgroundColor: Colors.white30,
+                                      valueColor: AlwaysStoppedAnimation(
+                                        value >= 1 ? Bg.success : Bg.ctaB,
+                                      ),
+                                    ),
+                                  ),
+                                  Text(
+                                    '${(value * 100).round()}%',
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.w900,
+                                      fontSize: 24,
+                                      shadows: [
+                                        Shadow(blurRadius: 12, color: Bg.ink),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            );
+                          },
+                        ),
+                        const SizedBox(height: 10),
+                        Text(
+                          detectorLoading
+                              ? 'Loading on-device AI...'
+                              : progress >= 1
+                              ? 'got it!'
+                              : matchedLabel == null
+                              ? 'Find the $target and hold it in frame'
+                              : '⏳ hold it — '
+                                    '${((1 - progress) * holdMs / 1000).toStringAsFixed(1)}s'
+                                    ' to 100%',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w800,
+                            fontSize: 14,
+                            shadows: [
+                              Shadow(
+                                blurRadius: 10,
+                                color: Bg.ink.withValues(alpha: 0.7),
+                              ),
+                            ],
                           ),
                         ),
-                      ),
-                      Text(
-                        '${(progress * 100).round()}%',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w900,
-                          fontSize: 24,
-                          shadows: [Shadow(blurRadius: 12, color: Bg.ink)],
+                        const SizedBox(height: 4),
+                        Text(
+                          'the meter is hold time, not AI confidence — keep it in frame',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: Colors.white.withValues(alpha: 0.75),
+                            fontWeight: FontWeight.w600,
+                            fontSize: 10.5,
+                            shadows: [
+                              Shadow(
+                                blurRadius: 8,
+                                color: Bg.ink.withValues(alpha: 0.7),
+                              ),
+                            ],
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
-                const SizedBox(height: 10),
-                Text(
-                  detectorLoading
-                      ? 'Loading on-device AI...'
-                      : progress >= 1
-                      ? 'got it!'
-                      : matchedLabel == null
-                      ? 'Find the $target and hold it in frame'
-                      : '⏳ hold it — '
-                            '${((1 - progress) * holdMs / 1000).toStringAsFixed(1)}s'
-                            ' to 100%',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w800,
-                    fontSize: 14,
-                    shadows: [
-                      Shadow(
-                        blurRadius: 10,
-                        color: Bg.ink.withValues(alpha: 0.7),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  'the meter is hold time, not AI confidence — keep it in frame',
-                  style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.75),
-                    fontWeight: FontWeight.w600,
-                    fontSize: 10.5,
-                    shadows: [
-                      Shadow(
-                        blurRadius: 8,
-                        color: Bg.ink.withValues(alpha: 0.7),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
+              ),
             ),
-            const Spacer(),
             if (chips.isNotEmpty)
               Wrap(
                 spacing: 8,
@@ -635,33 +674,45 @@ class _MessageCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       color: Bg.bg,
-      alignment: Alignment.center,
-      padding: const EdgeInsets.all(28),
-      child: BgCard(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(icon, style: const TextStyle(fontSize: 40)),
-            const SizedBox(height: 10),
-            Text(
-              title,
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                fontWeight: FontWeight.w900,
-                fontSize: 17,
-                color: Bg.ink,
+      child: SafeArea(
+        child: LayoutBuilder(
+          builder: (context, constraints) => SingleChildScrollView(
+            padding: const EdgeInsets.all(28),
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                minHeight: math.max(0.0, constraints.maxHeight - 56),
+              ),
+              child: Center(
+                child: BgCard(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(icon, style: const TextStyle(fontSize: 40)),
+                      const SizedBox(height: 10),
+                      Text(
+                        title,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w900,
+                          fontSize: 17,
+                          color: Bg.ink,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        body,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(fontSize: 12.5, color: Bg.sub),
+                      ),
+                      const SizedBox(height: 16),
+                      InkPill(icon: '⚡', label: actionLabel, onTap: onAction),
+                    ],
+                  ),
+                ),
               ),
             ),
-            const SizedBox(height: 8),
-            Text(
-              body,
-              textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 12.5, color: Bg.sub),
-            ),
-            const SizedBox(height: 16),
-            InkPill(icon: '⚡', label: actionLabel, onTap: onAction),
-          ],
+          ),
         ),
       ),
     );

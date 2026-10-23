@@ -332,142 +332,154 @@ class _LockSheet extends StatelessWidget {
 
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(22, 22, 22, 20),
       decoration: const BoxDecoration(
         color: Bg.card,
         borderRadius: BorderRadius.vertical(top: Radius.circular(38)),
       ),
       child: SafeArea(
         top: false,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Row(
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.sizeOf(context).height * 0.78,
+          ),
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(22, 22, 22, 20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                const Text('🔒', style: TextStyle(fontSize: 17)),
-                const SizedBox(width: 10),
-                const Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Bangun lockdown',
-                        style: TextStyle(
-                          fontWeight: FontWeight.w900,
-                          fontSize: 15.5,
-                          color: Bg.ink,
-                        ),
+                Row(
+                  children: [
+                    const Text('🔒', style: TextStyle(fontSize: 17)),
+                    const SizedBox(width: 10),
+                    const Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Bangun lockdown',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w900,
+                              fontSize: 15.5,
+                              color: Bg.ink,
+                            ),
+                          ),
+                          Text(
+                            'No alarms off until you finish the gate.',
+                            style: TextStyle(fontSize: 11.5, color: Bg.sub),
+                          ),
+                        ],
                       ),
-                      Text(
-                        'No alarms off until you finish the gate.',
-                        style: TextStyle(fontSize: 11.5, color: Bg.sub),
-                      ),
-                    ],
-                  ),
+                    ),
+                    const Text('🧠', style: TextStyle(fontSize: 20)),
+                  ],
                 ),
-                const Text('🧠', style: TextStyle(fontSize: 20)),
+                const SizedBox(height: 12),
+                const Divider(),
+                StatusRow(leading: 'Alarm', value: a.label),
+                const Divider(),
+                StatusRow(leading: 'Sound', value: a.toneName()),
+                const Divider(),
+                StatusRow(leading: 'Gate', value: a.challengeLabel()),
+                const SizedBox(height: 10),
+                if (mathGate) ...[
+                  CtaPill(
+                    icon: '🧮',
+                    label: 'Solve ${a.mathProblems} problems',
+                    onTap: onMath,
+                  ),
+                  if (scanGate) const SizedBox(height: 10),
+                ],
+                if (scanGate)
+                  InkPill(icon: '📷', label: 'Scan object', onTap: onScan),
+                if (a.toneKind == ToneKind.spotify) ...[
+                  const SizedBox(height: 8),
+                  TextButton.icon(
+                    onPressed: onSpotify,
+                    icon: Icon(
+                      spotifyPlaying
+                          ? Icons.graphic_eq_rounded
+                          : Icons.music_note_rounded,
+                      color: Bg.ink,
+                      size: 18,
+                    ),
+                    label: Text(
+                      spotifyPlaying
+                          ? 'Spotify is playing - tap to retry'
+                          : 'Start Spotify now',
+                      style: const TextStyle(
+                        color: Bg.ink,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 13,
+                      ),
+                    ),
+                  ),
+                  if (!spotifyAccess)
+                    Container(
+                      margin: const EdgeInsets.only(top: 2),
+                      padding: const EdgeInsets.fromLTRB(12, 8, 8, 8),
+                      decoration: BoxDecoration(
+                        color: Bg.cardSoft,
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: Bg.hairline),
+                      ),
+                      child: Row(
+                        children: [
+                          const Expanded(
+                            child: Text(
+                              'Allow notification access so Bangun can press play '
+                              'in Spotify by itself.',
+                              style: TextStyle(
+                                fontSize: 10.5,
+                                height: 1.35,
+                                color: Bg.sub,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          TextButton(
+                            style: TextButton.styleFrom(
+                              foregroundColor: Bg.toneBlueDeep,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                              ),
+                              minimumSize: const Size(0, 30),
+                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                            ),
+                            onPressed: onAllowSpotify,
+                            child: const Text(
+                              'Allow',
+                              style: TextStyle(
+                                fontSize: 11.5,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    )
+                  else
+                    Text(
+                      spotifyPlaying
+                          ? 'Music runs underneath the gate.'
+                          : 'The playlist starts by itself; this button retries '
+                                'the handoff.',
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        fontSize: 10.5,
+                        color: Bg.subFaint,
+                      ),
+                    ),
+                ],
+                const SizedBox(height: 6),
+                const Text(
+                  'Ringing continues until the gate is cleared — that\'s the point.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 10.5, color: Bg.subFaint),
+                ),
               ],
             ),
-            const SizedBox(height: 12),
-            const Divider(),
-            StatusRow(leading: 'Alarm', value: a.label),
-            const Divider(),
-            StatusRow(leading: 'Sound', value: a.toneName()),
-            const Divider(),
-            StatusRow(leading: 'Gate', value: a.challengeLabel()),
-            const SizedBox(height: 10),
-            if (mathGate) ...[
-              CtaPill(
-                icon: '🧮',
-                label: 'Solve ${a.mathProblems} problems',
-                onTap: onMath,
-              ),
-              if (scanGate) const SizedBox(height: 10),
-            ],
-            if (scanGate)
-              InkPill(icon: '📷', label: 'Scan object', onTap: onScan),
-            if (a.toneKind == ToneKind.spotify) ...[
-              const SizedBox(height: 8),
-              TextButton.icon(
-                onPressed: onSpotify,
-                icon: Icon(
-                  spotifyPlaying
-                      ? Icons.graphic_eq_rounded
-                      : Icons.music_note_rounded,
-                  color: Bg.ink,
-                  size: 18,
-                ),
-                label: Text(
-                  spotifyPlaying
-                      ? 'Spotify is playing - tap to retry'
-                      : 'Start Spotify now',
-                  style: const TextStyle(
-                    color: Bg.ink,
-                    fontWeight: FontWeight.w700,
-                    fontSize: 13,
-                  ),
-                ),
-              ),
-              if (!spotifyAccess)
-                Container(
-                  margin: const EdgeInsets.only(top: 2),
-                  padding: const EdgeInsets.fromLTRB(12, 8, 8, 8),
-                  decoration: BoxDecoration(
-                    color: Bg.cardSoft,
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: Bg.hairline),
-                  ),
-                  child: Row(
-                    children: [
-                      const Expanded(
-                        child: Text(
-                          'Allow notification access so Bangun can press play '
-                          'in Spotify by itself.',
-                          style: TextStyle(
-                            fontSize: 10.5,
-                            height: 1.35,
-                            color: Bg.sub,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 6),
-                      TextButton(
-                        style: TextButton.styleFrom(
-                          foregroundColor: Bg.toneBlueDeep,
-                          padding: const EdgeInsets.symmetric(horizontal: 8),
-                          minimumSize: const Size(0, 30),
-                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        ),
-                        onPressed: onAllowSpotify,
-                        child: const Text(
-                          'Allow',
-                          style: TextStyle(
-                            fontSize: 11.5,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                )
-              else
-                Text(
-                  spotifyPlaying
-                      ? 'Music runs underneath the gate.'
-                      : 'The playlist starts by itself; this button retries '
-                            'the handoff.',
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(fontSize: 10.5, color: Bg.subFaint),
-                ),
-            ],
-            const SizedBox(height: 6),
-            const Text(
-              'Ringing continues until the gate is cleared — that\'s the point.',
-              textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 10.5, color: Bg.subFaint),
-            ),
-          ],
+          ),
         ),
       ),
     );

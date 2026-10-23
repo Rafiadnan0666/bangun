@@ -133,46 +133,52 @@ class _SuccessScreenState extends State<SuccessScreen>
           ),
           Align(
             alignment: Alignment.bottomCenter,
-            child: Container(
-              margin: const EdgeInsets.all(18),
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.92),
-                borderRadius: BorderRadius.circular(28),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    didScan
-                        ? '${targetEmoji(widget.scannedLabel ?? 'cup')} '
-                              '${widget.scannedLabel ?? 'object'}'
-                        : '🧮 math',
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w900,
-                      fontSize: 15,
-                      color: Bg.ink,
+            child: SafeArea(
+              top: false,
+              minimum: const EdgeInsets.fromLTRB(18, 0, 18, 18),
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 20,
+                  vertical: 14,
+                ),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.92),
+                  borderRadius: BorderRadius.circular(28),
+                ),
+                child: Wrap(
+                  alignment: WrapAlignment.center,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  spacing: 10,
+                  runSpacing: 6,
+                  children: [
+                    Text(
+                      didScan
+                          ? '${targetEmoji(widget.scannedLabel ?? 'cup')} '
+                                '${widget.scannedLabel ?? 'object'}'
+                          : '🧮 math',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w900,
+                        fontSize: 15,
+                        color: Bg.ink,
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 14),
-                  Container(width: 1, height: 24, color: Bg.hairline),
-                  const SizedBox(width: 14),
-                  const Text(
-                    '🌟',
-                    style: TextStyle(fontWeight: FontWeight.w900),
-                  ),
-                  const SizedBox(width: 6),
-                  Text(
-                    widget.isTrial
-                        ? 'trial · stats unchanged'
-                        : 'streak ${widget.streak} · total ${widget.totalWins}',
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w800,
-                      fontSize: 13,
-                      color: Bg.ink,
+                    const Text(
+                      '🌟',
+                      style: TextStyle(fontWeight: FontWeight.w900),
                     ),
-                  ),
-                ],
+                    Text(
+                      widget.isTrial
+                          ? 'trial · stats unchanged'
+                          : 'streak ${widget.streak} · total ${widget.totalWins}',
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w800,
+                        fontSize: 13,
+                        color: Bg.ink,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),

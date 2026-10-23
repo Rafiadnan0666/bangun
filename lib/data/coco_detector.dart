@@ -47,7 +47,20 @@ class CocoDetector {
       'assets/models/coco_ssd_mobilenet_v1_1.0_quant.tflite';
   static const labelsAsset = 'assets/models/labels.txt';
 
-  static const double minScore = 0.4;
+  /// Only draw and accept clear detections. The old 0.40 cutoff produced a
+  /// lot of low-confidence box noise on real phones.
+  static const double minScore = 0.55;
+
+  /// Maximum boxes drawn by the scan overlay. The detector still returns
+  /// every clear class so a target cannot be hidden by this display cap.
+  static const int maxDetections = 4;
+
+  /// The COCO labels file uses `???` for unused class indexes. Those are not
+  /// objects and must never appear as detection tags or targets.
+  static bool isUsableLabel(String label) {
+    final value = label.trim().toLowerCase();
+    return value.isNotEmpty && value != '???' && value != 'unknown';
+  }
 
   Interpreter? _interpreter;
   List<String> _labels = const [];
@@ -153,6 +166,7 @@ class CocoDetector {
       final label = (classId >= 0 && classId < _labels.length)
           ? _labels[classId]
           : 'unknown';
+      if (!isUsableLabel(label)) continue;
       final b = _boxes[0][i];
       // SSD emits [yMin, xMin, yMax, xMax] per row.
       found.add(

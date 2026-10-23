@@ -81,28 +81,37 @@ class GradientText extends StatelessWidget {
   Widget build(BuildContext context) {
     return ShaderMask(
       blendMode: BlendMode.srcIn,
-      shaderCallback: (bounds) => Bg.cta.createShader(
-        Rect.fromLTWH(0, 0, bounds.width, bounds.height),
-      ),
+      shaderCallback: (bounds) =>
+          Bg.cta.createShader(Rect.fromLTWH(0, 0, bounds.width, bounds.height)),
       child: Text(text, style: style),
     );
   }
 }
 
 ThemeData bangunTheme() {
-  final scheme = ColorScheme.fromSeed(
-    seedColor: Bg.ctaA,
-    brightness: Brightness.light,
-  ).copyWith(
-    primary: Bg.ctaA,
-    secondary: Bg.sky,
-    surface: Bg.card,
-    error: Bg.danger,
-  );
+  final scheme =
+      ColorScheme.fromSeed(
+        seedColor: Bg.ctaA,
+        brightness: Brightness.light,
+      ).copyWith(
+        primary: Bg.ctaA,
+        secondary: Bg.sky,
+        surface: Bg.card,
+        error: Bg.danger,
+      );
   return ThemeData(
     useMaterial3: true,
     colorScheme: scheme,
     scaffoldBackgroundColor: Bg.bg,
+    // Material 3's fade-forward transition is smoother than the default
+    // zoom/slide, especially when moving between the editor and the gates.
+    pageTransitionsTheme: const PageTransitionsTheme(
+      builders: {
+        TargetPlatform.android: FadeForwardsPageTransitionsBuilder(),
+        TargetPlatform.windows: FadeForwardsPageTransitionsBuilder(),
+        TargetPlatform.linux: FadeForwardsPageTransitionsBuilder(),
+      },
+    ),
     textTheme: ThemeData.light().textTheme.apply(
       fontFamily: GoogleFonts.poppins().fontFamily,
     ),
@@ -145,8 +154,6 @@ ThemeData bangunTheme() {
       thumbShape: RoundSliderThumbShape(enabledThumbRadius: 11),
       overlayShape: RoundSliderOverlayShape(overlayRadius: 16),
     ),
-    dividerTheme: const DividerThemeData(
-      color: Bg.hairline,
-    ),
+    dividerTheme: const DividerThemeData(color: Bg.hairline),
   );
 }

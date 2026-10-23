@@ -56,7 +56,7 @@ class _HomeScreenState extends State<HomeScreen> {
     return Scaffold(
       body: SafeArea(
         child: ListView(
-          padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
           children: [
             const _Header(),
             const SizedBox(height: 18),
@@ -96,7 +96,6 @@ class _HomeScreenState extends State<HomeScreen> {
           ],
         ),
       ),
-      floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
     );
   }
 
@@ -714,7 +713,9 @@ class _AlarmRow extends StatelessWidget {
                             ),
                           ),
                           const SizedBox(height: 6),
-                          Row(
+                          Wrap(
+                            spacing: 10,
+                            runSpacing: 2,
                             children: [
                               Text(
                                 alarm.challengeLabel(),
@@ -724,8 +725,7 @@ class _AlarmRow extends StatelessWidget {
                                   color: Bg.plum,
                                 ),
                               ),
-                              if (alarm.repeatMode == RepeatMode.weekly) ...[
-                                const SizedBox(width: 10),
+                              if (alarm.repeatMode == RepeatMode.weekly)
                                 Text(
                                   repeatLabel(daily: false, days: alarm.days),
                                   style: const TextStyle(
@@ -733,7 +733,6 @@ class _AlarmRow extends StatelessWidget {
                                     color: Bg.subFaint,
                                   ),
                                 ),
-                              ],
                             ],
                           ),
                         ],
@@ -879,60 +878,65 @@ class _StatsSheet extends StatelessWidget {
       );
     }
 
-    return Container(
-      margin: const EdgeInsets.all(14),
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        color: Bg.card,
-        borderRadius: BorderRadius.circular(30),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
+    return SafeArea(
+      top: false,
+      child: Container(
+        margin: const EdgeInsets.all(14),
+        padding: const EdgeInsets.all(24),
+        decoration: BoxDecoration(
+          color: Bg.card,
+          borderRadius: BorderRadius.circular(30),
+        ),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
-                '🔥 Wake streaks',
-                style: TextStyle(
-                  fontWeight: FontWeight.w900,
-                  fontSize: 18,
-                  color: Bg.ink,
-                ),
+              Row(
+                children: [
+                  const Text(
+                    '🔥 Wake streaks',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w900,
+                      fontSize: 18,
+                      color: Bg.ink,
+                    ),
+                  ),
+                  const Spacer(),
+                  IconButton(
+                    onPressed: () => Navigator.pop(context),
+                    icon: const Icon(Icons.close, color: Bg.sub),
+                  ),
+                ],
               ),
-              const Spacer(),
-              IconButton(
-                onPressed: () => Navigator.pop(context),
-                icon: const Icon(Icons.close, color: Bg.sub),
+              const SizedBox(height: 16),
+              Row(children: cells),
+              const SizedBox(height: 20),
+              StatusRow(
+                leading: 'Current streak',
+                value: '${stats.currentStreak} day(s)',
+              ),
+              const Divider(),
+              StatusRow(
+                leading: 'Best streak',
+                value: '${stats.bestStreak} day(s)',
+              ),
+              const Divider(),
+              StatusRow(leading: 'Total wins', value: '${stats.totalWins}'),
+              const Divider(),
+              StatusRow(
+                leading: 'Math wins',
+                value: '${stats.mathWins} · Scan wins: ${stats.scanWins}',
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'A win is counted each time you finish a challenge to stop a ring. '
+                'Streaks span all alarms.',
+                style: TextStyle(fontSize: 11.5, color: Bg.subFaint),
               ),
             ],
           ),
-          const SizedBox(height: 16),
-          Row(children: cells),
-          const SizedBox(height: 20),
-          StatusRow(
-            leading: 'Current streak',
-            value: '${stats.currentStreak} day(s)',
-          ),
-          const Divider(),
-          StatusRow(
-            leading: 'Best streak',
-            value: '${stats.bestStreak} day(s)',
-          ),
-          const Divider(),
-          StatusRow(leading: 'Total wins', value: '${stats.totalWins}'),
-          const Divider(),
-          StatusRow(
-            leading: 'Math wins',
-            value: '${stats.mathWins} · Scan wins: ${stats.scanWins}',
-          ),
-          const SizedBox(height: 8),
-          const Text(
-            'A win is counted each time you finish a challenge to stop a ring. '
-            'Streaks span all alarms.',
-            style: TextStyle(fontSize: 11.5, color: Bg.subFaint),
-          ),
-        ],
+        ),
       ),
     );
   }

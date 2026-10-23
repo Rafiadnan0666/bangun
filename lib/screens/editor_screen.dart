@@ -385,6 +385,7 @@ class _EditorScreenState extends State<EditorScreen> {
     return Scaffold(
       backgroundColor: Bg.bg,
       body: SafeArea(
+        bottom: false,
         child: Column(
           children: [
             _EditorHeader(
@@ -393,7 +394,7 @@ class _EditorScreenState extends State<EditorScreen> {
             ),
             Expanded(
               child: ListView(
-                padding: const EdgeInsets.fromLTRB(20, 4, 20, 28),
+                padding: const EdgeInsets.fromLTRB(20, 4, 20, 20),
                 children: [
                   _TimeCard(
                     hour: _hour,
@@ -460,17 +461,37 @@ class _EditorScreenState extends State<EditorScreen> {
                     onVolume: (v) => setState(() => _volume = v),
                     onTest: _testSound,
                   ),
-                  const SizedBox(height: 26),
-                  CtaPill(
-                    icon: '💾',
-                    label: _isEditing ? 'Save changes' : 'Create alarm',
-                    onTap: _canSave ? _save : null,
-                  ),
                 ],
               ),
             ),
+            _EditorFooter(
+              label: _isEditing ? 'Save changes' : 'Create alarm',
+              onTap: _canSave ? _save : null,
+            ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _EditorFooter extends StatelessWidget {
+  const _EditorFooter({required this.label, required this.onTap});
+
+  final String label;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: const BoxDecoration(
+        color: Bg.bg,
+        border: Border(top: BorderSide(color: Bg.hairline)),
+      ),
+      padding: const EdgeInsets.fromLTRB(20, 10, 20, 10),
+      child: SafeArea(
+        top: false,
+        child: CtaPill(icon: '💾', label: label, onTap: onTap),
       ),
     );
   }
