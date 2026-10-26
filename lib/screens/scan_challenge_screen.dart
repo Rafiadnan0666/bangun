@@ -50,22 +50,21 @@ class _ScanChallengeScreenState extends State<ScanChallengeScreen>
   bool _detectorLoading = false;
   String? _detectorError;
   int _detectErrors = 0;
+  int _hitStreak = 0;
 
   late final Set<String> _accepted;
   late final String _target;
 
   bool get _isTrial => widget.alarm.id == trialAlarmId;
 
-  /// Keep the overlay quiet without letting non-target boxes push a real hit
-  /// out of view. Accepted labels always rank first, then confidence.
+  /// Only surface labels that count toward the target. Random background
+  /// classes are still detected internally, but showing them makes the model
+  /// look like it is hallucinating.
   List<Detection> get _displayDetections {
-    final ranked = List<Detection>.of(_detections);
-    ranked.sort((a, b) {
-      final aHit = _accepted.contains(a.label);
-      final bHit = _accepted.contains(b.label);
-      if (aHit != bHit) return aHit ? -1 : 1;
-      return b.score.compareTo(a.score);
-    });
+    final ranked = _detections
+        .where((d) => _accepted.contains(d.label))
+        .toList(growable: false);
+    ranked.sort((a, b) => b.score.compareTo(a.score));
     return ranked.take(CocoDetector.maxDetections).toList(growable: false);
   }
 
@@ -238,13 +237,21 @@ class _ScanChallengeScreenState extends State<ScanChallengeScreen>
           .where((d) => _accepted.contains(d.label))
           .fold<Detection?>(null, (best, d) => best ?? d);
 
+      // Do not trust a single-frame hit. A label must survive two nearby
+      // frames before it can add hold time; a miss only removes one notch so
+      // ordinary detector flicker does not reset the gate.
+      _hitStreak = hit == null
+          ? math.max(0, _hitStreak - 1)
+          : math.min(3, _hitStreak + 1);
+      final confirmed = hit != null && _hitStreak >= 2;
+
       // Temporal gate delta — clamp so a background pause doesn't grant a
       // giant free chunk of presence time.
       final dt = _lastGateAt == null
           ? 84
           : now.difference(_lastGateAt!).inMilliseconds.clamp(0, 400);
       _lastGateAt = now;
-      _applySession(hit != null, hit?.label, hit?.score ?? 0, dt);
+      _applySession(confirmed, hit?.label, hit?.score ?? 0, dt);
 
       if (_progress >= 1 && !_finishing) {
         _finish(hit?.label ?? _matchedLabel);
@@ -303,6 +310,7 @@ class _ScanChallengeScreenState extends State<ScanChallengeScreen>
 
   @override
   Widget build(BuildContext context) {
+    final visibleDetections = _displayDetections;
     final preview = _controller != null && _controller!.value.isInitialized
         ? ClipRect(
             child: SizedBox.expand(
@@ -330,11 +338,11 @@ class _ScanChallengeScreenState extends State<ScanChallengeScreen>
             preview,
             if (_controller != null &&
                 _controller!.value.isInitialized &&
-                _detections.isNotEmpty &&
+                visibleDetections.isNotEmpty &&
                 _frameW > 0)
               Positioned.fill(
                 child: _DetectionBoxes(
-                  detections: _displayDetections,
+                  detections: visibleDetections,
                   accepted: _accepted,
                   frameWidth: _frameW,
                   frameHeight: _frameH,
@@ -386,7 +394,7 @@ class _ScanChallengeScreenState extends State<ScanChallengeScreen>
               _ScanHud(
                 target: _target,
                 progress: _progress,
-                detections: _displayDetections,
+                detections: visibleDetections,
                 matchedLabel: _matchedLabel,
                 accepted: _accepted,
                 holdMs: _holdMs,
@@ -461,18 +469,24 @@ class _ScanHud extends StatelessWidget {
                             fontWeight: FontWeight.w800,
                           ),
                         ),
-                        Text(
-                          target,
-                          style: const TextStyle(
-                            fontSize: 19,
-                            fontWeight: FontWeight.w900,
-                            color: Bg.ink,
+                        FittedBox(
+                          fit: BoxFit.scaleDown,
+                          alignment: Alignment.centerLeft,
+                          child: Text(
+                            target,
+                            style: const TextStyle(
+                              fontSize: 19,
+                              fontWeight: FontWeight.w900,
+                              color: Bg.ink,
+                            ),
                           ),
                         ),
                         if (accepted.length > 1)
                           Text(
                             'also counts: '
                             '${accepted.where((l) => l != target).join(', ')}',
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
                               fontSize: 10.5,
                               color: Bg.sub,

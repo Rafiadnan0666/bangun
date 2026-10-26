@@ -138,6 +138,7 @@ class _Header extends StatelessWidget {
   Widget build(BuildContext context) {
     final streak = context.watch<AlarmRepository>().stats.currentStreak;
     return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Container(
           width: 46,
@@ -150,43 +151,56 @@ class _Header extends StatelessWidget {
           child: const Text('👋', style: TextStyle(fontSize: 22)),
         ),
         const SizedBox(width: 12),
-        const Expanded(
+        Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                'Bangun.',
-                style: TextStyle(
-                  fontSize: 27,
-                  fontWeight: FontWeight.w900,
-                  color: Bg.ink,
-                  height: 1.05,
-                ),
+              // Keep the streak badge on the title line when it fits, but let
+              // it drop below on narrow screens instead of squeezing the name.
+              Wrap(
+                crossAxisAlignment: WrapCrossAlignment.center,
+                spacing: 10,
+                runSpacing: 4,
+                children: [
+                  const Text(
+                    'Bangun.',
+                    style: TextStyle(
+                      fontSize: 27,
+                      fontWeight: FontWeight.w900,
+                      color: Bg.ink,
+                      height: 1.05,
+                    ),
+                  ),
+                  if (streak > 0)
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 5,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Bg.card,
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Text(
+                        '🔥 $streak',
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w800,
+                          color: Bg.ink,
+                        ),
+                      ),
+                    ),
+                ],
               ),
-              Text(
+              const SizedBox(height: 2),
+              const Text(
                 'wake smart · stop by scan or math',
-                maxLines: 1,
+                maxLines: 2,
                 overflow: TextOverflow.ellipsis,
-                style: TextStyle(fontSize: 12, color: Bg.sub),
+                style: TextStyle(fontSize: 12, color: Bg.sub, height: 1.2),
               ),
             ],
           ),
         ),
-        if (streak > 0)
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            decoration: BoxDecoration(
-              color: Bg.card,
-              borderRadius: BorderRadius.circular(999),
-            ),
-            child: Text(
-              '🔥 $streak',
-              style: const TextStyle(
-                fontWeight: FontWeight.w800,
-                color: Bg.ink,
-              ),
-            ),
-          ),
       ],
     );
   }

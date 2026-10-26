@@ -292,9 +292,12 @@ generated problems.
 - Meter: the 100 percent meter measures hold time, not model confidence. A
   matching frame adds presence weighted by score (`0.4 + score`), a miss decays
   at 1.25 times speed, and a single frame can add at most 400 milliseconds. The
-  gate clears at a continuous 3-second hold. Only clear detections at 0.55
-  confidence or higher are shown and counted. Placeholder `???` classes and
-  `unknown` labels are filtered, and the overlay shows at most four boxes.
+  gate clears at a continuous 3-second hold. Only detections at 0.60
+  confidence with a plausible box area count, and a label must appear in two
+  nearby frames before it adds hold time. Placeholder `???` classes,
+  `unknown` labels, and tiny background boxes are filtered. The overlay shows
+  only the requested target and its accepted similar labels, at most four
+  boxes.
 
 ---
 
@@ -366,11 +369,11 @@ To regenerate the built-in ring tones after editing the generator:
 dart tools/gen_sounds.dart
 ```
 
-The test suite currently has 54 tests covering the math engine, scan geometry,
-scan target selection and migration, detector label filtering, Spotify link
-validation, alarm model normalization, and missed one-time alarm handling.
-`flutter analyze` must report no issues. Debug and release APK builds are also
-part of the verification pass.
+The test suite currently has 57 tests covering the math engine, scan geometry,
+scan target selection and migration, detector label mapping and box filtering,
+Spotify link validation, alarm model normalization, and missed one-time alarm
+handling. `flutter analyze` must report no issues. Debug and release APK builds
+are also part of the verification pass.
 
 ---
 
@@ -467,15 +470,23 @@ The highest-impact ones are fixed in this version.
 - The scan gate could stay at 0 percent with no explanation when the model did
   not load. It now loads and retries the detector on demand, shows loading and
   failure states, and decays misses more gently. The detector now shows only
-  clear detections at 0.55 confidence, filters `???`/`unknown` labels, and caps
-  the overlay at four boxes so the camera does not fill with low-confidence
-  noise.
+  target-matching detections at 0.60 confidence, filters `???`/`unknown` labels
+  and tiny boxes, requires two nearby frames before adding hold time, and hides
+  unrelated background classes so the camera does not look like it is
+  hallucinating.
+- The detector's class IDs were off by one. The TFLite model emits 0-based
+  COCO IDs, while the 91-line label asset starts with a placeholder, so cats
+  were shown as birds and cups as wine glasses. The mapping now shifts by one,
+  and a regression test checks the real label asset.
 - Bottom actions and long content could crowd the system navigation area. The
   editor now has a fixed safe-area footer, the ring lock sheet scrolls inside a
   height cap, success stats respect the bottom inset, and the scan HUD adapts to
   short screens. Page changes use Material 3 fade-forward transitions.
+- The home header could clip its tagline or squeeze the streak badge on narrow
+  phones. The title and streak badge now wrap, the tagline gets two lines, and
+  the scan header scales the target name instead of overflowing.
 
-Verification for this pass: `flutter analyze` reports no issues, 54 tests pass,
+Verification for this pass: `flutter analyze` reports no issues, 57 tests pass,
 and the debug and release APKs build successfully.
 
 ---

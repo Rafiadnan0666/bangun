@@ -47,13 +47,37 @@ class CocoDetector {
       'assets/models/coco_ssd_mobilenet_v1_1.0_quant.tflite';
   static const labelsAsset = 'assets/models/labels.txt';
 
-  /// Only draw and accept clear detections. The old 0.40 cutoff produced a
-  /// lot of low-confidence box noise on real phones.
-  static const double minScore = 0.55;
+  /// Only draw and accept clear detections. The class-label fix removes the
+  /// biggest source of nonsense; this cutoff removes the remaining weak boxes
+  /// without making low-light objects impossible to scan.
+  static const double minScore = 0.60;
+
+  /// Reject tiny specks. A real held object covers a meaningful part of the
+  /// square input; tiny boxes are usually background noise.
+  static const double minBoxArea = 0.01;
 
   /// Maximum boxes drawn by the scan overlay. The detector still returns
   /// every clear class so a target cannot be hidden by this display cap.
   static const int maxDetections = 4;
+
+  /// A box must have a sane, non-trivial area before it can be shown.
+  static bool isPlausibleBox(Rect box) {
+    if (box.width <= 0 || box.height <= 0) return false;
+    return box.width * box.height >= minBoxArea;
+  }
+
+  /// Maps a raw model class id to a label.
+  ///
+  /// The TFLite model emits 0-based COCO class ids (person = 0, cat = 16,
+  /// cup = 46, book = 83, ...). The asset label map is the 91-line COCO map
+  /// with a leading placeholder at index 0, so the model id must be shifted
+  /// by one. Without this, every detection is labeled as the class before it.
+  static String? labelForClassId(List<String> labels, int classId) {
+    final index = classId + 1;
+    if (index < 0 || index >= labels.length) return null;
+    final label = labels[index];
+    return isUsableLabel(label) ? label : null;
+  }
 
   /// The COCO labels file uses `???` for unused class indexes. Those are not
   /// objects and must never appear as detection tags or targets.
@@ -163,19 +187,14 @@ class CocoDetector {
       final score = _scores[0][i];
       if (score < minScore) continue;
       final classId = _classes[0][i].toInt();
-      final label = (classId >= 0 && classId < _labels.length)
-          ? _labels[classId]
-          : 'unknown';
-      if (!isUsableLabel(label)) continue;
+      final label = labelForClassId(_labels, classId);
+      if (label == null) continue;
       final b = _boxes[0][i];
       // SSD emits [yMin, xMin, yMax, xMax] per row.
+      final box = Rect.fromLTRB(b[1], b[0], b[3], b[2]);
+      if (!isPlausibleBox(box)) continue;
       found.add(
-        Detection(
-          classId: classId,
-          label: label,
-          score: score,
-          box: Rect.fromLTRB(b[1], b[0], b[3], b[2]),
-        ),
+        Detection(classId: classId, label: label, score: score, box: box),
       );
     }
     found.sort((a, b) => b.score.compareTo(a.score));
