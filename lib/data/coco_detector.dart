@@ -86,6 +86,32 @@ class CocoDetector {
     return value.isNotEmpty && value != '???' && value != 'unknown';
   }
 
+  /// Spot-checks the label asset before the model is used.
+  ///
+  /// The model emits 0-based COCO ids, so index 0 must be the placeholder and
+  /// index 1 must be `person`. If the asset ever ships shifted or truncated,
+  /// fail loudly instead of silently naming every object as its neighbour.
+  static void verifyLabelMap(List<String> labels) {
+    const expected = <int, String>{
+      0: '???',
+      1: 'person',
+      17: 'cat',
+      61: 'cake',
+      62: 'chair',
+      67: 'dining table',
+      84: 'book',
+    };
+    for (final entry in expected.entries) {
+      final actual = entry.key < labels.length ? labels[entry.key] : null;
+      if (actual != entry.value) {
+        throw StateError(
+          'Detector label map mismatch at index ${entry.key}: '
+          'expected "${entry.value}", got "${actual ?? 'missing'}".',
+        );
+      }
+    }
+  }
+
   Interpreter? _interpreter;
   List<String> _labels = const [];
   bool _loaded = false;
@@ -129,6 +155,7 @@ class CocoDetector {
           .map((e) => e.trim())
           .where((e) => e.isNotEmpty)
           .toList();
+      verifyLabelMap(_labels);
 
       final options = InterpreterOptions()..threads = 4;
       final interpreter = await Interpreter.fromAsset(

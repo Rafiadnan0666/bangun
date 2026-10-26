@@ -369,7 +369,7 @@ To regenerate the built-in ring tones after editing the generator:
 dart tools/gen_sounds.dart
 ```
 
-The test suite currently has 57 tests covering the math engine, scan geometry,
+The test suite currently has 59 tests covering the math engine, scan geometry,
 scan target selection and migration, detector label mapping and box filtering,
 Spotify link validation, alarm model normalization, and missed one-time alarm
 handling. `flutter analyze` must report no issues. Debug and release APK builds
@@ -477,7 +477,9 @@ The highest-impact ones are fixed in this version.
 - The detector's class IDs were off by one. The TFLite model emits 0-based
   COCO IDs, while the 91-line label asset starts with a placeholder, so cats
   were shown as birds and cups as wine glasses. The mapping now shifts by one,
-  and a regression test checks the real label asset.
+  a regression test checks the real label asset, and a runtime guard refuses to
+  load a shifted map. The home and scan footers show the build stamp
+  (`v1.0.1 build 2`) so a stale APK is obvious during testing.
 - Bottom actions and long content could crowd the system navigation area. The
   editor now has a fixed safe-area footer, the ring lock sheet scrolls inside a
   height cap, success stats respect the bottom inset, and the scan HUD adapts to
@@ -486,7 +488,7 @@ The highest-impact ones are fixed in this version.
   phones. The title and streak badge now wrap, the tagline gets two lines, and
   the scan header scales the target name instead of overflowing.
 
-Verification for this pass: `flutter analyze` reports no issues, 57 tests pass,
+Verification for this pass: `flutter analyze` reports no issues, 59 tests pass,
 and the debug and release APKs build successfully.
 
 ---

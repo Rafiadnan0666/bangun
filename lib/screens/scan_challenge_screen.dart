@@ -8,6 +8,7 @@ import 'package:flutter/services.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:provider/provider.dart';
 
+import '../core/build_info.dart';
 import '../core/format.dart';
 import '../core/palette.dart';
 import '../core/widgets.dart';
@@ -662,6 +663,17 @@ class _ScanHud extends StatelessWidget {
                   ),
                 ),
               ),
+            const Padding(
+              padding: EdgeInsets.only(top: 6),
+              child: Text(
+                kBuildStamp,
+                style: TextStyle(
+                  fontSize: 9,
+                  color: Colors.white54,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
           ],
         ),
       ),

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart' hide RepeatMode;
 import 'package:permission_handler/permission_handler.dart';
 import 'package:provider/provider.dart';
 
+import '../core/build_info.dart';
 import '../core/format.dart';
 import '../core/palette.dart';
 import '../core/widgets.dart';
@@ -92,6 +93,12 @@ class _HomeScreenState extends State<HomeScreen> {
               'scanning or grinding math',
               textAlign: TextAlign.center,
               style: TextStyle(fontSize: 11, color: Bg.subFaint),
+            ),
+            const SizedBox(height: 6),
+            const Text(
+              kBuildStamp,
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 9.5, color: Bg.subFaint),
             ),
           ],
         ),

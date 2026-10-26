@@ -58,5 +58,29 @@ void main() {
       expect(CocoDetector.labelForClassId(labels, 61), 'chair');
       expect(CocoDetector.labelForClassId(labels, 83), 'book');
     });
+
+    test('real label asset passes the runtime map guard', () {
+      final raw = File('assets/models/labels.txt').readAsStringSync();
+      final labels = raw
+          .split('\n')
+          .map((e) => e.trim())
+          .where((e) => e.isNotEmpty)
+          .toList();
+      expect(() => CocoDetector.verifyLabelMap(labels), returnsNormally);
+    });
+
+    test('a shifted label asset is rejected instead of mislabeling', () {
+      final raw = File('assets/models/labels.txt').readAsStringSync();
+      final labels = raw
+          .split('\n')
+          .map((e) => e.trim())
+          .where((e) => e.isNotEmpty)
+          .toList();
+      // Simulate the old off-by-one asset: drop the leading placeholder.
+      expect(
+        () => CocoDetector.verifyLabelMap(labels.sublist(1)),
+        throwsStateError,
+      );
+    });
   });
 }
