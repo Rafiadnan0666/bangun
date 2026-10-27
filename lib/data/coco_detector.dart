@@ -56,9 +56,9 @@ class CocoDetector {
   /// square input; tiny boxes are usually background noise.
   static const double minBoxArea = 0.01;
 
-  /// Maximum boxes drawn by the scan overlay. The detector still returns
-  /// every clear class so a target cannot be hidden by this display cap.
-  static const int maxDetections = 4;
+  /// The model emits at most 10 post-NMS boxes. Draw every clear one so the
+  /// scan screen shows all objects in frame, not only the current target.
+  static const int maxDetections = 10;
 
   /// A box must have a sane, non-trivial area before it can be shown.
   static bool isPlausibleBox(Rect box) {
@@ -237,18 +237,38 @@ class CocoDetector {
   }
 }
 
+/// Reusable tightly-packed RGB buffer for [yuvToSquareRgb].
+///
+/// The scan gate converts a frame roughly nine times per second. Reusing one
+/// allocation keeps the GC quiet and avoids a 270 KB allocation per frame.
+class RgbFrameBuffer {
+  Uint8List _bytes = Uint8List(0);
+
+  /// Returns a buffer of exactly [length] bytes, reusing the previous one when
+  /// the size has not changed.
+  Uint8List ensure(int length) {
+    if (_bytes.length != length) _bytes = Uint8List(length);
+    return _bytes;
+  }
+
+  int get length => _bytes.length;
+}
+
 /// Camera YUV420 frame -> tightly packed RGB bytes, center-cropped square,
 /// rotated to portrait using the sensor orientation. Output: uint8 model
-/// input, raw 0–255 values (`outSize × outSize × 3`).
+/// input, raw 0-255 values (`outSize x outSize x 3`).
+///
+/// Pass a [RgbFrameBuffer] to reuse the output allocation across frames.
 ///
 /// Note: some devices report interleaved U/V planes (NV12/NV21 variants);
 /// indexing with pixelStride keeps chroma valid, and for the rare interleaved
-/// case chroma is merely swapped — detection is luma-dominated, so quality
+/// case chroma is merely swapped - detection is luma-dominated, so quality
 /// holds.
 Uint8List yuvToSquareRgb(
   CameraImage image, {
   required int sensorOrientation,
   required int outSize,
+  RgbFrameBuffer? buffer,
 }) {
   final planes = image.planes;
   if (planes.length < 3) {
@@ -270,23 +290,18 @@ Uint8List yuvToSquareRgb(
   final uStep = uPlane.bytesPerPixel ?? 1;
   final vStep = vPlane.bytesPerPixel ?? 1;
 
-  final o = ((sensorOrientation % 360) + 360) % 360;
-  final rot = switch (o) {
-    0 => '0',
-    90 => '90',
-    180 => '180',
-    _ => '270',
-  };
+  final orientation = ((sensorOrientation % 360) + 360) % 360;
 
   // Portrait-space crop square.
-  final swapped = rot == '90' || rot == '270';
+  final swapped = orientation == 90 || orientation == 270;
   final pw = swapped ? h : w;
   final ph = swapped ? w : h;
   final s = math.min(pw, ph);
   final ox = (pw - s) ~/ 2;
   final oy = (ph - s) ~/ 2;
 
-  final out = Uint8List(outSize * outSize * 3);
+  final out =
+      buffer?.ensure(outSize * outSize * 3) ?? Uint8List(outSize * outSize * 3);
   final scale = s / outSize;
 
   var oi = 0;
@@ -295,24 +310,24 @@ Uint8List yuvToSquareRgb(
     for (var sx = 0; sx < outSize; sx++) {
       final xp = _ic(ox + (sx * scale).floor(), 0, pw - 1);
 
+      // Rotate the portrait sample back onto the sensor plane. Every branch
+      // maps into [0, w) x [0, h), so no clamp is needed after the switch.
       int px;
       int py;
-      switch (rot) {
-        case '90': // portrait = sensor rotated 90° CW
+      switch (orientation) {
+        case 90: // portrait = sensor rotated 90 deg CW
           px = yp;
           py = h - 1 - xp;
-        case '270': // portrait = sensor rotated 90° CCW
+        case 270: // portrait = sensor rotated 90 deg CCW
           px = w - 1 - yp;
           py = xp;
-        case '180':
+        case 180:
           px = w - 1 - xp;
           py = h - 1 - yp;
         default:
           px = xp;
           py = yp;
       }
-      px = _ic(px, 0, w - 1);
-      py = _ic(py, 0, h - 1);
 
       final y = yB[py * yRow + px];
       final cx = px >> 1;
@@ -320,8 +335,8 @@ Uint8List yuvToSquareRgb(
       final u = uB[cy * uRow + cx * uStep] - 128;
       final v = vB[cy * vRow + cx * vStep] - 128;
 
-      // BT.601, fixed-point (scaled ×1024): R+=1.403·V, G−=0.344·U+0.714·V,
-      // B+=1.772·U.
+      // BT.601, fixed-point (scaled x1024): R+=1.403*V, G-=0.344*U+0.714*V,
+      // B+=1.772*U.
       out[oi++] = _ic(y + ((v * 1437) >> 10), 0, 255);
       out[oi++] = _ic(y - (((u * 352) + (v * 731)) >> 10), 0, 255);
       out[oi++] = _ic(y + ((u * 1814) >> 10), 0, 255);

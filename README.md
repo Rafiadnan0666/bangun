@@ -66,11 +66,12 @@ again.
 6. **Math gate.** Bangun generates the requested number of problems (3, 5, or
    7) with increasing difficulty. A wrong answer resets the current problem.
    The gate clears only after every problem is solved.
-7. **Scan gate.** Bangun asks for a random easy object from the configured
-   pool; trial runs randomize too. The camera preview runs COCO-SSD at roughly
-   9 frames per second.
-   Detection boxes and labels are drawn on the preview. Holding the correct
-   object for 3 continuous seconds clears the gate.
+7. **Scan gate.** Bangun asks for a random object from the configured pool;
+   trial runs randomize too. Every one of the 80 named COCO classes is
+   selectable, plus the glass and screen composite targets. The camera preview
+   runs COCO-SSD at roughly 9 frames per second. Every clear detection gets a
+   box and label; the requested object is highlighted in green. Holding the
+   correct object for 3 continuous seconds clears the gate.
 8. **Stop.** The success handler calls `Alarm.stop()`. The native sound stops,
    the ring notification disappears, and the app returns to the home screen
    with the updated stats.
@@ -115,8 +116,11 @@ The editor creates or edits an alarm. From top to bottom it contains:
 - Repeat mode: once, every day, or specific weekdays. At least one weekday
   must remain selected.
 - Challenge type: math grind, object scan, or pick at ring. For math you pick
-  3, 5, or 7 problems. For scan you choose the target pool. "Pick at ring"
-  offers both gates on the ring screen.
+  3, 5, or 7 problems. For scan you choose the target pool from all 80 named
+  COCO classes plus the glass and screen composites. The picker has search,
+  Common/All/Food/Home/Tech/Outdoors/Animals/People filters, and one-tap
+  Select common and Clear actions. "Pick at ring" offers both gates on the ring
+  screen.
 - Ring sound: four built-in tones, a local audio file, or a Spotify link. The
   test button previews built-in tones and files for 5 seconds, and runs the
   real Spotify handoff for Spotify links.
@@ -152,10 +156,14 @@ problem on screen until it is solved. There is no timer and no skip button.
 ### Scan challenge
 
 The scan screen opens the camera, loads the on-device detector, and asks for
-one object. A matched detection draws a box and a label. A hold meter fills
-while the target stays visible and drains at 1.25 times speed when it disappears.
-The gate clears at a continuous 3-second hold. If the camera is unavailable,
-the screen reports the problem instead of pretending the gate passed.
+one object. Every clear detection is boxed and labeled, and the requested
+object and its accepted similar labels turn green. A hold meter fills while
+the target stays visible and drains at 1.25 times speed when it disappears.
+The gate clears at a continuous 3-second hold. The HUD has a torch toggle, a
+tips sheet, and (for trials) a Shuffle button that rerolls the target. The
+target card, meter halo, and detection chips animate as the scene changes. If
+the camera is unavailable, the screen reports the problem instead of pretending
+the gate passed.
 
 ### Streaks and trials
 
@@ -269,17 +277,29 @@ generated problems.
 - Model: `assets/models/coco_ssd_mobilenet_v1_1.0_quant.tflite`. It is an SSD
   MobileNet v1 detector with COCO labels, quantized uint8 input at 300 by 300
   by 3, and 10 post-NMS detections.
+- Classes: the label asset has 91 lines: a leading `???` placeholder, 80 named
+  COCO classes, and 10 unused indexes. All 80 named classes are selectable in
+  the editor. `glass` and `screen` are extra composite prompts built on top of
+  the real classes.
+- Picker: the target picker groups objects into Common, All, Food, Home, Tech,
+  Outdoors, Animals, and People. Search covers all groups, selected targets
+  stay at the front, and Select common and Clear give one-tap control. The
+  selected count and a warning keep an empty pool from being saved.
 - Camera: YUV420 frames are throttled to about 9 frames per second. Each frame
   is center cropped to a square with a fixed-point BT.601 conversion, adjusted
   for sensor rotation, then passed to the interpreter as raw 0 to 255 bytes.
-- Drawing: every detection carries a bounding box. The painter draws a rounded
-  rectangle and a small label pill over the live preview. The box turns green
-  when the label counts toward the gate.
-- Synonyms: the COCO model has 90 coarse classes, so the gate uses a similarity
-  map. Asking for a cup accepts a wine glass or bottle. The `glass`
-  target accepts cup, wine glass, and bottle. The `screen` target accepts tv,
-  laptop, and cell phone. The map is `kSimilarScanTargets` in
-  `lib/data/models.dart`.
+  The RGB buffer is reused between frames instead of allocating 270 KB each
+  time.
+- Drawing: every clear detection carries a bounding box. The painter draws a
+  rounded rectangle and a small label pill over the live preview. The target
+  and its accepted similar labels turn green; other clear objects stay white
+  so the screen shows everything the model sees. The preview and overlay are
+  wrapped in repaint boundaries, and the painter only repaints when its boxes
+  actually change.
+- Synonyms: the COCO map is coarse, so the gate uses a similarity map. Asking
+  for a cup accepts a wine glass or bottle. The `glass` target accepts cup,
+  wine glass, and bottle. The `screen` target accepts tv, laptop, and cell
+  phone. The map is `kSimilarScanTargets` in `lib/data/models.dart`.
 - Target choice: new alarms start with a broad pool of common room objects.
   Both trial runs and normal alarms randomize the target, preferring easy
   objects that are normally nearby, such as a glass, a screen, a phone, or a
@@ -289,6 +309,10 @@ generated problems.
 - Loading: the scan screen loads the detector on demand and retries if the
   first load fails. It shows a loading line and a retry card instead of sitting
   silently at 0 percent.
+- Interaction: the HUD has a torch toggle, a tips sheet, and a Shuffle button
+  on trial runs. The target card swaps with a scale and slide animation, the
+  hold meter pulses green while the target is confirmed, and detection chips
+  pop in as objects enter the frame.
 - Meter: the 100 percent meter measures hold time, not model confidence. A
   matching frame adds presence weighted by score (`0.4 + score`), a miss decays
   at 1.25 times speed, and a single frame can add at most 400 milliseconds. The
@@ -296,8 +320,8 @@ generated problems.
   confidence with a plausible box area count, and a label must appear in two
   nearby frames before it adds hold time. Placeholder `???` classes,
   `unknown` labels, and tiny background boxes are filtered. The overlay shows
-  only the requested target and its accepted similar labels, at most four
-  boxes.
+  every clear detection, up to the model's 10-box limit; the chip strip shows
+  the top four to six and summarizes the rest.
 
 ---
 
@@ -369,7 +393,7 @@ To regenerate the built-in ring tones after editing the generator:
 dart tools/gen_sounds.dart
 ```
 
-The test suite currently has 59 tests covering the math engine, scan geometry,
+The test suite currently has 66 tests covering the math engine, scan geometry,
 scan target selection and migration, detector label mapping and box filtering,
 Spotify link validation, alarm model normalization, and missed one-time alarm
 handling. `flutter analyze` must report no issues. Debug and release APK builds
@@ -469,17 +493,16 @@ The highest-impact ones are fixed in this version.
   every run, old cup-only records migrate once, and every target is selectable.
 - The scan gate could stay at 0 percent with no explanation when the model did
   not load. It now loads and retries the detector on demand, shows loading and
-  failure states, and decays misses more gently. The detector now shows only
-  target-matching detections at 0.60 confidence, filters `???`/`unknown` labels
-  and tiny boxes, requires two nearby frames before adding hold time, and hides
-  unrelated background classes so the camera does not look like it is
-  hallucinating.
+  failure states, and decays misses more gently. The detector shows every clear
+  detection at 0.60 confidence, filters `???`/`unknown` labels and tiny boxes,
+  requires two nearby frames before adding hold time, and highlights the target
+  while leaving other real objects visible.
 - The detector's class IDs were off by one. The TFLite model emits 0-based
   COCO IDs, while the 91-line label asset starts with a placeholder, so cats
   were shown as birds and cups as wine glasses. The mapping now shifts by one,
   a regression test checks the real label asset, and a runtime guard refuses to
   load a shifted map. The home and scan footers show the build stamp
-  (`v1.0.1 build 2`) so a stale APK is obvious during testing.
+  (`v1.0.2 build 3`) so a stale APK is obvious during testing.
 - Bottom actions and long content could crowd the system navigation area. The
   editor now has a fixed safe-area footer, the ring lock sheet scrolls inside a
   height cap, success stats respect the bottom inset, and the scan HUD adapts to
@@ -488,16 +511,17 @@ The highest-impact ones are fixed in this version.
   phones. The title and streak badge now wrap, the tagline gets two lines, and
   the scan header scales the target name instead of overflowing.
 
-Verification for this pass: `flutter analyze` reports no issues, 59 tests pass,
+Verification for this pass: `flutter analyze` reports no issues, 66 tests pass,
 and the debug and release APKs build successfully.
 
 ---
 
 ## Known limitations
 
-- The scan gate only knows the 90 COCO classes. A very specific branded object
-  is outside the model. Pick a nearby class; the synonym map covers close
-  variants such as cup, wine glass, bottle, bowl, tv, laptop, and cell phone.
+- The scan gate only knows the 80 named COCO classes in the model's 90-slot
+  map. A very specific branded object is outside the model. Pick a nearby
+  class; the synonym map covers close variants such as cup, wine glass, bottle,
+  bowl, tv, laptop, and cell phone.
 - Detection quality in the dark, at extreme angles, or on reflective surfaces
   is unmeasured. The hold meter is intentionally forgiving, but this is not a
   scientific benchmark. The paper discusses this threat to validity.

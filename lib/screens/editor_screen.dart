@@ -38,7 +38,6 @@ class _EditorScreenState extends State<EditorScreen> {
   late ChallengeKind _kind;
   late int _problems;
   late Set<String> _targets;
-  String _query = '';
   late ToneKind _toneKind;
   late BuiltInTone _tone;
   late String? _filePath;
@@ -423,11 +422,10 @@ class _EditorScreenState extends State<EditorScreen> {
                     kind: _kind,
                     problems: _problems,
                     targets: _targets,
-                    query: _query,
                     onKind: (k) => setState(() => _kind = k),
                     onProblems: (n) => setState(() => _problems = n),
-                    onQuery: (q) => setState(() => _query = q),
                     onToggleTarget: (t) {
+                      HapticFeedback.selectionClick();
                       setState(() {
                         if (_targets.contains(t)) {
                           _targets.remove(t);
@@ -435,6 +433,14 @@ class _EditorScreenState extends State<EditorScreen> {
                           _targets.add(t);
                         }
                       });
+                    },
+                    onSelectCommon: () {
+                      HapticFeedback.selectionClick();
+                      setState(() => _targets.addAll(kDefaultScanTargets));
+                    },
+                    onClearTargets: () {
+                      HapticFeedback.selectionClick();
+                      setState(_targets.clear);
                     },
                   ),
                   const SizedBox(height: 16),
@@ -796,21 +802,21 @@ class _ChallengeCard extends StatelessWidget {
     required this.kind,
     required this.problems,
     required this.targets,
-    required this.query,
     required this.onKind,
     required this.onProblems,
-    required this.onQuery,
     required this.onToggleTarget,
+    required this.onSelectCommon,
+    required this.onClearTargets,
   });
 
   final ChallengeKind kind;
   final int problems;
   final Set<String> targets;
-  final String query;
   final ValueChanged<ChallengeKind> onKind;
   final ValueChanged<int> onProblems;
-  final ValueChanged<String> onQuery;
   final ValueChanged<String> onToggleTarget;
+  final VoidCallback onSelectCommon;
+  final VoidCallback onClearTargets;
 
   static const _kinds = [
     (ChallengeKind.math, '🧮', 'Math grind', 'Solve arithmetic at 6 a.m.'),
@@ -925,9 +931,9 @@ class _ChallengeCard extends StatelessWidget {
                 : kind == ChallengeKind.scan
                 ? _TargetPicker(
                     selected: targets,
-                    query: query,
-                    onQuery: onQuery,
                     onToggle: onToggleTarget,
+                    onSelectCommon: onSelectCommon,
+                    onClearTargets: onClearTargets,
                   )
                 : const Padding(
                     padding: EdgeInsets.only(top: 6),
@@ -944,32 +950,64 @@ class _ChallengeCard extends StatelessWidget {
   }
 }
 
-class _TargetPicker extends StatelessWidget {
+class _TargetPicker extends StatefulWidget {
   const _TargetPicker({
     required this.selected,
-    required this.query,
-    required this.onQuery,
     required this.onToggle,
+    required this.onSelectCommon,
+    required this.onClearTargets,
   });
 
   final Set<String> selected;
-  final String query;
-  final ValueChanged<String> onQuery;
   final ValueChanged<String> onToggle;
+  final VoidCallback onSelectCommon;
+  final VoidCallback onClearTargets;
+
+  @override
+  State<_TargetPicker> createState() => _TargetPickerState();
+}
+
+class _TargetPickerState extends State<_TargetPicker> {
+  late final TextEditingController _searchCtrl;
+  String _group = 'Common';
+  String _query = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _searchCtrl = TextEditingController();
+  }
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
+  }
+
+  void _selectGroup(String name) {
+    HapticFeedback.selectionClick();
+    setState(() => _group = name);
+  }
+
+  void _clearSearch() {
+    _searchCtrl.clear();
+    setState(() => _query = '');
+  }
 
   @override
   Widget build(BuildContext context) {
-    final pool = kPickableTargets
-        .where((t) => selected.contains(t))
-        .followedBy(
-          kPickableTargets.where(
-            (t) =>
-                !selected.contains(t) &&
-                (query.isEmpty ||
-                    t.toLowerCase().contains(query.toLowerCase())),
-          ),
-        )
-        .toList();
+    final query = _query.trim().toLowerCase();
+    final searching = query.isNotEmpty;
+    final source = searching ? kPickableTargets : scanTargetsForGroup(_group);
+    final matches = source
+        .where((target) => !searching || target.contains(query))
+        .toList(growable: false);
+    final ordered = <String>[
+      ...matches.where(widget.selected.contains),
+      ...matches.where((target) => !widget.selected.contains(target)),
+    ];
+    final selectedCount = widget.selected.length;
+    final easyCount = widget.selected.where(kEasyScanTargets.contains).length;
 
     return Padding(
       padding: const EdgeInsets.only(top: 6),
@@ -977,40 +1015,197 @@ class _TargetPicker extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           TextField(
-            onChanged: onQuery,
-            decoration: const InputDecoration(
-              hintText: '🔍  search objects…',
+            controller: _searchCtrl,
+            onChanged: (value) => setState(() => _query = value),
+            textInputAction: TextInputAction.search,
+            decoration: InputDecoration(
+              hintText: 'Search all ${kCocoScanTargets.length} COCO classes...',
               isDense: true,
+              prefixIcon: const Icon(Icons.search_rounded, size: 18),
+              suffixIcon: _query.isEmpty
+                  ? null
+                  : IconButton(
+                      tooltip: 'Clear search',
+                      icon: const Icon(Icons.close_rounded, size: 17),
+                      onPressed: _clearSearch,
+                    ),
             ),
           ),
           const SizedBox(height: 10),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                for (final group in kTargetGroups)
+                  Padding(
+                    padding: const EdgeInsets.only(right: 7),
+                    child: _GroupChip(
+                      group: group,
+                      selected: !searching && _group == group.name,
+                      onTap: () => _selectGroup(group.name),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 10),
+          Row(
             children: [
-              for (final t in pool)
-                EmojiChip(
-                  emoji: targetEmoji(t),
-                  label: t,
-                  selected: selected.contains(t),
-                  color: Bg.mint,
-                  onTap: () => onToggle(t),
+              Expanded(
+                child: AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 180),
+                  child: Text(
+                    searching
+                        ? '${matches.length} match'
+                              '${matches.length == 1 ? '' : 'es'}'
+                        : '${ordered.length} object'
+                              '${ordered.length == 1 ? '' : 's'}'
+                              ' · $selectedCount selected',
+                    key: ValueKey(
+                      '$searching-$_group-${matches.length}-$selectedCount',
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 11,
+                      color: Bg.sub,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
                 ),
+              ),
+              TextButton.icon(
+                onPressed: widget.onSelectCommon,
+                icon: const Icon(Icons.auto_awesome_rounded, size: 14),
+                label: const Text('Common'),
+                style: _actionStyle(),
+              ),
+              TextButton(
+                onPressed: selectedCount == 0 ? null : widget.onClearTargets,
+                style: _actionStyle(),
+                child: const Text('Clear'),
+              ),
             ],
           ),
           const SizedBox(height: 8),
-          Text(
-            selected.isEmpty
-                ? 'Pick at least one target!'
-                : selected.every(kEasyScanTargets.contains)
-                ? 'Easy targets cover most scenes — hard ones optional.'
-                : 'Easy objects are asked first; hard ones only as fallback.',
-            style: TextStyle(
-              fontSize: 11,
-              color: selected.isEmpty ? Bg.danger : Bg.subFaint,
+          if (ordered.isEmpty)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+              decoration: BoxDecoration(
+                color: Bg.bg,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: Bg.hairline),
+              ),
+              child: Column(
+                children: [
+                  const Text('🔍', style: TextStyle(fontSize: 22)),
+                  const SizedBox(height: 4),
+                  Text(
+                    'No objects match "$_query".',
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(fontSize: 11.5, color: Bg.sub),
+                  ),
+                  TextButton(
+                    onPressed: _clearSearch,
+                    child: const Text('Clear search'),
+                  ),
+                ],
+              ),
+            )
+          else
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (final target in ordered)
+                  EmojiChip(
+                    emoji: targetEmoji(target),
+                    label: target,
+                    selected: widget.selected.contains(target),
+                    color: Bg.mint,
+                    onTap: () => widget.onToggle(target),
+                  ),
+              ],
+            ),
+          const SizedBox(height: 9),
+          AnimatedSwitcher(
+            duration: const Duration(milliseconds: 200),
+            child: Text(
+              selectedCount == 0
+                  ? 'Pick at least one target to save this alarm.'
+                  : easyCount == 0
+                  ? 'Only hard targets selected. They work, but a real alarm '
+                        'may take longer.'
+                  : selectedCount > 24
+                  ? 'Wide pool: easy objects are asked first, so rare classes '
+                        'are the fallback.'
+                  : '$selectedCount selected. Easy objects are asked first; '
+                        'hard ones are the fallback.',
+              key: ValueKey('copy-$selectedCount-$easyCount'),
+              style: TextStyle(
+                fontSize: 11,
+                height: 1.35,
+                color: selectedCount == 0 ? Bg.danger : Bg.subFaint,
+              ),
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  ButtonStyle _actionStyle() => TextButton.styleFrom(
+    foregroundColor: Bg.plum,
+    padding: const EdgeInsets.symmetric(horizontal: 6),
+    minimumSize: const Size(0, 30),
+    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+    textStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.w800),
+  );
+}
+
+class _GroupChip extends StatelessWidget {
+  const _GroupChip({
+    required this.group,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final ScanTargetGroup group;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 180),
+      curve: Curves.easeOutCubic,
+      decoration: BoxDecoration(
+        color: selected ? Bg.ink : Colors.white,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: selected ? Colors.transparent : Bg.hairline),
+      ),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(999),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(group.emoji, style: const TextStyle(fontSize: 12)),
+              const SizedBox(width: 5),
+              Text(
+                group.name,
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w800,
+                  color: selected ? Colors.white : Bg.sub,
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

@@ -33,64 +33,105 @@ enum BuiltInTone {
   String get assetPath => 'assets/sounds/$file';
 }
 
-/// Named subset of the COCO-90 label map that makes sense as a
-/// "show me this object" gate (unnamed `???` classes are excluded).
-const kPickableTargets = [
-  'glass',
-  'screen',
-  'cup',
+/// The 80 named classes emitted by the bundled COCO-SSD model.
+///
+/// The label asset is the standard 91-line COCO map: index 0 is the `???`
+/// placeholder and ten indexes are unused. The model emits 0-based class ids,
+/// so the detector shifts them by one before reading the map. Every named
+/// class is a usable scan target.
+const kCocoScanTargets = <String>[
+  'person',
+  'bicycle',
+  'car',
+  'motorcycle',
+  'airplane',
+  'bus',
+  'train',
+  'truck',
+  'boat',
+  'traffic light',
+  'fire hydrant',
+  'stop sign',
+  'parking meter',
+  'bench',
+  'bird',
+  'cat',
+  'dog',
+  'horse',
+  'sheep',
+  'cow',
+  'elephant',
+  'bear',
+  'zebra',
+  'giraffe',
+  'backpack',
+  'umbrella',
+  'handbag',
+  'tie',
+  'suitcase',
+  'frisbee',
+  'skis',
+  'snowboard',
+  'sports ball',
+  'kite',
+  'baseball bat',
+  'baseball glove',
+  'skateboard',
+  'surfboard',
+  'tennis racket',
   'bottle',
-  'book',
-  'cell phone',
-  'laptop',
-  'keyboard',
-  'mouse',
-  'remote',
-  'clock',
-  'potted plant',
-  'vase',
-  'scissors',
-  'toothbrush',
-  'spoon',
+  'wine glass',
+  'cup',
   'fork',
   'knife',
+  'spoon',
   'bowl',
-  'wine glass',
   'banana',
   'apple',
   'sandwich',
   'orange',
   'broccoli',
   'carrot',
+  'hot dog',
   'pizza',
   'donut',
   'cake',
   'chair',
   'couch',
+  'potted plant',
   'bed',
   'dining table',
+  'toilet',
   'tv',
-  'backpack',
-  'handbag',
-  'umbrella',
-  'sports ball',
+  'laptop',
+  'mouse',
+  'remote',
+  'keyboard',
+  'cell phone',
+  'microwave',
+  'oven',
+  'toaster',
+  'sink',
+  'refrigerator',
+  'book',
+  'clock',
+  'vase',
+  'scissors',
   'teddy bear',
   'hair drier',
-  'stop sign',
-  'traffic light',
-  'parking meter',
-  'bench',
-  'person',
-  'cat',
-  'dog',
-  'bird',
-  'bicycle',
-  'motorcycle',
-  'car',
-  'bus',
-  'train',
-  'truck',
-  'boat',
+  'toothbrush',
+];
+
+/// Scan prompts that are not a single COCO class. The similarity map below
+/// makes their concrete labels count, so "show me a glass" accepts a cup,
+/// wine glass, or bottle.
+const kCompositeScanTargets = <String>['glass', 'screen'];
+
+/// Every target offered by the editor: all 80 named COCO classes plus the two
+/// composite prompts.
+const kPickableTargets = <String>[
+  ...kCompositeScanTargets,
+  ...kCocoScanTargets,
 ];
 
 /// Default pool for new scan alarms. These are common objects in a bedroom,
@@ -159,6 +200,125 @@ const kEasyScanTargets = {
   'handbag',
   'teddy bear',
 };
+
+/// One filter tab in the scan-target picker.
+///
+/// [targets] is a curated view of [kPickableTargets]. A target can appear in
+/// more than one tab; the `Common` and `All` tabs are shortcuts, while the
+/// object-family tabs together cover every pickable target exactly once.
+class ScanTargetGroup {
+  const ScanTargetGroup(this.name, this.emoji, this.targets);
+
+  final String name;
+  final String emoji;
+  final List<String> targets;
+}
+
+const kTargetGroups = <ScanTargetGroup>[
+  ScanTargetGroup('Common', '⭐', kDefaultScanTargets),
+  ScanTargetGroup('All', '🌐', kPickableTargets),
+  ScanTargetGroup('Food', '🍎', [
+    'glass',
+    'bottle',
+    'wine glass',
+    'cup',
+    'fork',
+    'knife',
+    'spoon',
+    'bowl',
+    'banana',
+    'apple',
+    'sandwich',
+    'orange',
+    'broccoli',
+    'carrot',
+    'hot dog',
+    'pizza',
+    'donut',
+    'cake',
+  ]),
+  ScanTargetGroup('Home', '🛋️', [
+    'chair',
+    'couch',
+    'potted plant',
+    'bed',
+    'dining table',
+    'toilet',
+    'clock',
+    'vase',
+    'scissors',
+    'teddy bear',
+    'book',
+    'microwave',
+    'oven',
+    'toaster',
+    'sink',
+    'refrigerator',
+    'hair drier',
+    'toothbrush',
+  ]),
+  ScanTargetGroup('Tech', '💻', [
+    'screen',
+    'tv',
+    'laptop',
+    'mouse',
+    'remote',
+    'keyboard',
+    'cell phone',
+  ]),
+  ScanTargetGroup('Outdoors', '🌳', [
+    'bicycle',
+    'car',
+    'motorcycle',
+    'airplane',
+    'bus',
+    'train',
+    'truck',
+    'boat',
+    'traffic light',
+    'fire hydrant',
+    'stop sign',
+    'parking meter',
+    'bench',
+    'backpack',
+    'umbrella',
+    'handbag',
+    'tie',
+    'suitcase',
+    'frisbee',
+    'skis',
+    'snowboard',
+    'sports ball',
+    'kite',
+    'baseball bat',
+    'baseball glove',
+    'skateboard',
+    'surfboard',
+    'tennis racket',
+  ]),
+  ScanTargetGroup('Animals', '🐾', [
+    'bird',
+    'cat',
+    'dog',
+    'horse',
+    'sheep',
+    'cow',
+    'elephant',
+    'bear',
+    'zebra',
+    'giraffe',
+  ]),
+  ScanTargetGroup('People', '🧑', ['person']),
+];
+
+/// Targets shown when [name] is the active picker tab. Unknown names fall
+/// back to the common pool so the editor always renders something useful.
+List<String> scanTargetsForGroup(String name) {
+  for (final group in kTargetGroups) {
+    if (group.name == name) return group.targets;
+  }
+  return kDefaultScanTargets;
+}
 
 /// Chooses the scan-gate target from an alarm's configured pool.
 ///

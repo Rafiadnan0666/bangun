@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:bangun/core/format.dart';
 import 'package:bangun/data/models.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -19,6 +21,53 @@ void main() {
       for (final target in kDefaultScanTargets) {
         expect(kPickableTargets, contains(target));
       }
+    });
+  });
+
+  group('full COCO coverage', () {
+    test('all 80 named COCO classes are pickable', () {
+      expect(kCocoScanTargets, hasLength(80));
+      expect(kCocoScanTargets.toSet(), hasLength(80));
+      expect(kPickableTargets, containsAll(kCocoScanTargets));
+      expect(kPickableTargets, containsAll(['glass', 'screen']));
+      expect(kPickableTargets, hasLength(82));
+      expect(kPickableTargets, isNot(contains('???')));
+    });
+
+    test('the bundled label asset matches the pickable COCO classes', () {
+      final raw = File('assets/models/labels.txt').readAsStringSync();
+      final labels = raw
+          .split('\n')
+          .map((line) => line.trim())
+          .where((line) => line.isNotEmpty)
+          .where((line) => line != '???' && line != 'unknown')
+          .toList(growable: false);
+      expect(labels, kCocoScanTargets);
+    });
+
+    test('every pickable target has a real emoji', () {
+      for (final target in kPickableTargets) {
+        expect(
+          targetEmoji(target),
+          isNot('🎯'),
+          reason: 'missing emoji for $target',
+        );
+      }
+    });
+
+    test('object-family groups cover every target exactly once', () {
+      final families = kTargetGroups.where(
+        (group) => group.name != 'Common' && group.name != 'All',
+      );
+      final covered = <String>[for (final group in families) ...group.targets];
+      expect(covered.toSet(), kPickableTargets.toSet());
+      expect(covered.length, covered.toSet().length);
+    });
+
+    test('group lookup falls back safely', () {
+      expect(scanTargetsForGroup('Food'), contains('cake'));
+      expect(scanTargetsForGroup('Animals'), contains('zebra'));
+      expect(scanTargetsForGroup('nope'), kDefaultScanTargets);
     });
   });
 

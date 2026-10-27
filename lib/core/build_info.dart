@@ -2,5 +2,5 @@
 /// current build during on-device testing.
 ///
 /// Keep this in sync with `version:` in pubspec.yaml. Bump both together.
-const String kAppVersion = '1.0.1';
-const String kBuildStamp = 'v$kAppVersion build 2 - label fix';
+const String kAppVersion = '1.0.2';
+const String kBuildStamp = 'v$kAppVersion build 3 - all classes + live boxes';

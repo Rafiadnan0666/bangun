@@ -14,10 +14,10 @@ void main() {
       expect(CocoDetector.isUsableLabel('cell phone'), isTrue);
     });
 
-    test('confidence cutoff and overlay cap stay conservative', () {
+    test('confidence cutoff stays conservative and all boxes are shown', () {
       expect(CocoDetector.minScore, greaterThanOrEqualTo(0.6));
       expect(CocoDetector.minBoxArea, greaterThan(0));
-      expect(CocoDetector.maxDetections, lessThanOrEqualTo(5));
+      expect(CocoDetector.maxDetections, greaterThanOrEqualTo(8));
     });
 
     test('tiny background boxes are rejected', () {
@@ -81,6 +81,25 @@ void main() {
         () => CocoDetector.verifyLabelMap(labels.sublist(1)),
         throwsStateError,
       );
+    });
+  });
+
+  group('RgbFrameBuffer', () {
+    test('reuses the same allocation for the same frame size', () {
+      final buffer = RgbFrameBuffer();
+      final first = buffer.ensure(300 * 300 * 3);
+      expect(first, hasLength(270000));
+      expect(identical(buffer.ensure(270000), first), isTrue);
+      expect(buffer.length, 270000);
+    });
+
+    test('allocates a fresh buffer when the size changes', () {
+      final buffer = RgbFrameBuffer();
+      final first = buffer.ensure(12);
+      final second = buffer.ensure(24);
+      expect(second, hasLength(24));
+      expect(identical(first, second), isFalse);
+      expect(identical(buffer.ensure(24), second), isTrue);
     });
   });
 }

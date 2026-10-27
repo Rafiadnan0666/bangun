@@ -1,7 +1,7 @@
 name: bangun
 description: "Bangun: alarms you stop with a scan or a math grind. All ML runs on-device."
 publish_to: 'none'
-version: 1.0.1+2
+version: 1.0.2+3
 
 environment:
   sdk: ^3.13.5
