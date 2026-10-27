@@ -677,7 +677,6 @@ class _ScanHud extends StatelessWidget {
                               _DetectionsPanel(
                                 detections: detections,
                                 accepted: accepted,
-                                compact: compact,
                               ),
                             ],
                             if (!isTrial)
@@ -1048,20 +1047,13 @@ class _PulseHaloState extends State<_PulseHalo>
 }
 
 class _DetectionsPanel extends StatelessWidget {
-  const _DetectionsPanel({
-    required this.detections,
-    required this.accepted,
-    required this.compact,
-  });
+  const _DetectionsPanel({required this.detections, required this.accepted});
 
   final List<Detection> detections;
   final Set<String> accepted;
-  final bool compact;
 
   @override
   Widget build(BuildContext context) {
-    final visible = detections.take(compact ? 4 : 6).toList(growable: false);
-    final hidden = detections.length - visible.length;
     return ConstrainedBox(
       constraints: const BoxConstraints(maxWidth: 620),
       child: Container(
@@ -1102,29 +1094,10 @@ class _DetectionsPanel extends StatelessWidget {
               spacing: 6,
               runSpacing: 6,
               children: [
-                for (final detection in visible)
+                for (final detection in detections)
                   _DetectionChip(
                     detection: detection,
                     matched: accepted.contains(detection.label),
-                  ),
-                if (hidden > 0)
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 7,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.14),
-                      borderRadius: BorderRadius.circular(999),
-                    ),
-                    child: Text(
-                      '+$hidden more',
-                      style: const TextStyle(
-                        fontSize: 10.5,
-                        fontWeight: FontWeight.w800,
-                        color: Colors.white,
-                      ),
-                    ),
                   ),
               ],
             ),

@@ -319,9 +319,8 @@ generated problems.
   gate clears at a continuous 3-second hold. Only detections at 0.60
   confidence with a plausible box area count, and a label must appear in two
   nearby frames before it adds hold time. Placeholder `???` classes,
-  `unknown` labels, and tiny background boxes are filtered. The overlay shows
-  every clear detection, up to the model's 10-box limit; the chip strip shows
-  the top four to six and summarizes the rest.
+  `unknown` labels, and tiny background boxes are filtered. The overlay and
+  chip strip show every clear detection, up to the model's 10-box limit.
 
 ---
 
