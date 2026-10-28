@@ -114,9 +114,9 @@ class _BangunAppState extends State<BangunApp> with WidgetsBindingObserver {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Bangun',
+      title: 'awake',
       debugShowCheckedModeBanner: false,
-      theme: bangunTheme(),
+      theme: awakeTheme(),
       navigatorKey: _navKey,
       navigatorObservers: [_ringTracker],
       // The layout is tuned for phones with default text size; clamp extreme

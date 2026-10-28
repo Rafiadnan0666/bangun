@@ -1,87 +1,44 @@
-# Bangun
+# awake
 
-Bangun is an Android alarm clock that cannot be snoozed or dismissed. When the
-alarm rings, the only way to stop it is to finish the challenge configured for
-that alarm: a set of math problems or a live camera scan of a real object. All
-detection runs on the phone with TensorFlow Lite. Nothing is uploaded.
+Awake is a non-dismissable Android alarm clock that stops only when you complete a challenge: solve math problems or scan a real object. All detection runs on-device using TensorFlow Lite. No data leaves your phone.
 
-The app is built with Flutter and the `alarm` plugin. The interface uses a
-blue and white design system: pale blue canvas, white rounded cards, and blue
-accents everywhere. Red is reserved for destructive actions and green for
-completed successes.
+Built with Flutter and the `alarm` plugin. The interface uses a blue-and-white design system: pale blue canvas, white rounded cards, and blue accents everywhere. Red marks destructive actions and green marks success wins.
 
-The research manuscript and evaluation documents live in `paper/`, which is
-excluded from this repository through `.gitignore`.
+Research manuscripts live in `paper/`, excluded via `.gitignore`.
 
 ---
 
-## What Bangun does
+## What awake does
 
-Bangun covers the full wake-up loop:
+The wake-up loop:
 
-1. You create one or more alarms and choose a time, repeat pattern, challenge,
-   and ring sound.
-2. Bangun schedules each alarm with Android's exact alarm service and stores a
-   native copy, so the alarm still fires after the app process is killed.
-3. At the scheduled time the alarm starts a foreground service and begins
-   playing the configured sound, even when the screen is locked or off.
-4. A full-screen notification opens the ring screen automatically. You do not
-   have to unlock the phone or find the app.
-5. The ring screen shows the time, label, sound, challenge, and the buttons
-   that start the challenge.
-6. The alarm keeps ringing while you work through the math or scan gate.
-7. When the challenge succeeds, Bangun calls `Alarm.stop()`, records the win,
-   updates the streak, and disables the alarm if it was a one-time alarm.
-8. If the alarm repeats, Bangun re-arms the next occurrence.
+1. Create alarms with time, repeat pattern, challenge, and ring sound.
+2. Alarms schedule via Android's exact alarm service with native persistence.
+3. At ring time, a foreground service plays your sound even on a locked screen.
+4. A full-screen notification opens the ring screen immediately — no unlock needed.
+5. The ring screen shows time, label, sound, challenge, and action buttons.
+6. The alarm rings continuously while you work through the challenge.
+7. On success, `Alarm.stop()` is called, stats update, streak increments, and one-time alarms disable.
+8. Repeating alarms re-arm for their next occurrence.
 
-There is no stop button in the notification, no snooze button, no dismiss
-button, and no way to close the ring screen with the Back gesture. Killing the
-app does not stop the native alarm. Changing the media volume does not lower
-the ring below the enforced floor. The challenge is the only exit.
+There is no stop, snooze, or dismiss button. The Back gesture is blocked. Killing the app does not stop an active ring. Volume changes do not lower the ring below floor level. The challenge is the only exit.
 
 ---
 
 ## How a wake-up works, step by step
 
-This is the complete path from an alarm being saved to the phone being silent
-again.
+1. **Save.** The editor validates, builds a `BangunAlarm`, and passes it to `AlarmRepository`. Past alarms schedule for the next day. One-time alarms missed while the app was dead are retired at boot.
+2. **Schedule.** The repository converts to plugin settings and stores them. Android receives an `RTC_WAKEUP` exact alarm with a native copy for process-death survival.
+3. **Fire.** At the scheduled second, Android starts awake's alarm receiver and foreground service. The audio plays on the alarm stream with enforced 35% minimum volume.
+4. **Launch ring screen.** The notification carries a full-screen intent. MainActivity uses `showWhenLocked` and `turnScreenOn`, waking the screen and pushing the ring route.
+5. **Start challenge.** Tap math or scan on the ring sheet. The ring route is replaced so Back cannot return to it.
+6. **Math gate.** 3, 5, or 7 problems are generated with increasing difficulty. Wrong answers reset. All answers are non-negative integers (division is exact, subtraction is range-ordered).
+7. **Scan gate.** Ask for a random object from a pool of 80 COCO classes (plus glass, screen composites). Camera preview runs COCO-SSD at ~9 fps. Correct objects get green bounding boxes. Hold the target for 3 continuous seconds.
+8. **Stop.** Success calls `Alarm.stop()`. Sound stops, notification clears, app returns to home with updated stats.
+9. **Repeat or disable.** One-time alarms disable. Repeating alarms re-arm.
+10. **Record.** Wins, streaks, best streaks, and daily records are saved to SharedPreferences.
 
-1. **Save.** The editor validates the form, builds a `BangunAlarm`, and passes
-   it to `AlarmRepository`. A new one-time alarm whose time already passed is
-   scheduled for the next day. A one-time alarm whose slot passes while the
-   app is not running is retired at the next boot instead of ringing a day
-   late.
-2. **Schedule.** The repository converts the alarm to the plugin's settings and
-   stores it. Android receives an `RTC_WAKEUP` exact alarm and a native copy of
-   the settings. This copy is what makes the alarm survive process death.
-3. **Fire.** At the scheduled second, Android starts Bangun's alarm receiver
-   and foreground service. The chosen audio source starts on the alarm stream
-   with the configured volume, enforced at a minimum of 35 percent.
-4. **Launch the ring screen.** The alarm notification carries a full-screen
-   intent. MainActivity is declared with `showWhenLocked` and `turnScreenOn`,
-   so the screen wakes and the ring route is pushed on top of everything.
-5. **Start the challenge.** Tap the math or scan button on the ring sheet. The
-   ring route is replaced by the challenge screen, so the ring cannot be
-   returned to by pressing Back.
-6. **Math gate.** Bangun generates the requested number of problems (3, 5, or
-   7) with increasing difficulty. A wrong answer resets the current problem.
-   The gate clears only after every problem is solved.
-7. **Scan gate.** Bangun asks for a random object from the configured pool;
-   trial runs randomize too. Every one of the 80 named COCO classes is
-   selectable, plus the glass and screen composite targets. The camera preview
-   runs COCO-SSD at roughly 9 frames per second. Every clear detection gets a
-   box and label; the requested object is highlighted in green. Holding the
-   correct object for 3 continuous seconds clears the gate.
-8. **Stop.** The success handler calls `Alarm.stop()`. The native sound stops,
-   the ring notification disappears, and the app returns to the home screen
-   with the updated stats.
-9. **Repeat or disable.** A one-time alarm is marked disabled. A daily or
-   weekly alarm is re-armed for its next occurrence.
-10. **Record.** Total wins, math wins, scan wins, the current streak, the best
-    streak, and wins by day are written to SharedPreferences.
-
-For a mix alarm, the ring sheet offers both gates. Finishing either one stops
-the alarm.
+A mix alarm offers both gates. Finishing either stops the alarm.
 
 ---
 
@@ -91,112 +48,65 @@ the alarm.
 
 The home screen has four main areas:
 
-- The blue hero card shows the next enabled alarm, its label, its time, and
-  how long until it rings. When nothing is enabled it says so.
-- The detail card repeats the alarm name, challenge, sound, repeat mode, and
-  win statistics.
-- The quick tiles open the editor, a scan trial, a math trial, and the streak
-  summary. Trial runs use alarm id `0` and never touch native scheduling.
-- The alarm list can be filtered by all, on, or off. Each row has a switch and
-  opens the editor when tapped.
+- **Hero card**: Shows the next enabled alarm (time, label, countdown).
+- **Detail card**: Repeats alarm name, challenge, sound, repeat mode, and stats.
+- **Quick tiles**: Open editor, scan trial, math trial, and streak summary. Trials use alarm id `0` and never modify stats.
+- **Alarm list**: Filter by all/on/off. Each row has a switch and opens the editor on tap.
 
-The "Alarm reliability" card appears only when Android would block a reliable
-ring. It covers five cases: notifications are off, exact alarms are blocked,
-full-screen notifications are disallowed, an enabled Spotify alarm is missing
-notification access, and an enabled custom-file alarm points at a file that no
-longer exists. Each case has a one-tap fix and is re-checked when the app
-resumes. The missing-file row opens the affected alarm so you can pick the file
-again.
+The **Alarm reliability** card appears when Android would block a reliable ring. It covers: notifications off, exact alarms blocked, full-screen notifications disallowed, enabled Spotify alarm missing notification access, missing custom tone files. Each case has a one-tap fix.
 
 ### Editor
 
-The editor creates or edits an alarm. From top to bottom it contains:
+Creates or edits an alarm. From top to bottom:
 
-- The time picker, with plus and minus controls for hour and minute.
-- Repeat mode: once, every day, or specific weekdays. At least one weekday
-  must remain selected.
-- Challenge type: math grind, object scan, or pick at ring. For math you pick
-  3, 5, or 7 problems. For scan you choose the target pool from all 80 named
-  COCO classes plus the glass and screen composites. The picker has search,
-  Common/All/Food/Home/Tech/Outdoors/Animals/People filters, and one-tap
-  Select common and Clear actions. "Pick at ring" offers both gates on the ring
-  screen.
-- Ring sound: four built-in tones, a local audio file, or a Spotify link. The
-  test button previews built-in tones and files for 5 seconds, and runs the
-  real Spotify handoff for Spotify links.
-- Volume slider. The engine never goes below 35 percent while an alarm rings.
-- Save, or delete when editing an existing alarm.
+- **Time picker**: Hour/minute with +/- controls, or tap for system picker.
+- **Repeat mode**: Once, every day, or specific weekdays (at least one required).
+- **Challenge type**: Math grind (3/5/7 problems), Object scan (select target pool), or Pick at ring (both gates available).
+- **Ring sound**: Four built-in tones, local audio file, or Spotify link. Test button previews for 5 seconds.
+- **Volume slider**: Minimum enforced at 35% during ring.
+- **Save/Delete**: Save for new alarms or updated changes. Delete when editing.
 
-A Spotify alarm cannot be saved with an empty link or with a link that does
-not pass the Spotify host and item checks. The editor shows an inline error for
-a lookalike host or a search page, so a mistyped link never opens a browser
-behind the alarm. Selecting Spotify opens a notification-access dialog when the
-permission is missing, because Android does not allow any app to press play in
-Spotify without it.
+Spotify links require valid host/item checks. Invalid links show inline errors.
 
 ### Ring screen
 
-The ring screen is a full-screen blue gradient with the alarm time, the label,
-and a bottom sheet. The sheet shows the alarm name, sound, gate, and the
-challenge buttons. There is no close button. Back is blocked by `PopScope`.
-The screen keeps the device awake and hides the system bars.
+Full-screen blue gradient with alarm time, label, and bottom sheet. Shows alarm name, sound, gate, and challenge buttons. No close button. Back is blocked via `PopScope`. Screen wake lock active, system bars hidden.
 
-For Spotify alarms the sheet also shows whether Spotify is currently playing
-and an "Allow" button when notification access is missing. The Spotify handoff
-is automatic; the sheet button retries it manually.
+For Spotify alarms: shows play status and "Allow" button when notification access is missing. Auto-handoff occurs immediately after ring starts.
 
 ### Math challenge
 
-The math screen shows the progress (for example, Problem 3 of 3), a difficulty
-tag, the expression, and an answer field. The custom keypad has digits, delete,
-and a done button. There is no minus sign because every generated answer is a
-non-negative integer. A wrong answer clears the input and leaves the same
-problem on screen until it is solved. There is no timer and no skip button.
+Shows progress (Problem 1 of 3), difficulty tag, expression, and answer field. Custom keypad has digits, delete, and done. No minus sign—answers are always non-negative. Wrong answers reset the input without advancing. No timer, no skip button.
+
+Difficulty ramp:
+| Difficulty | Problems | Expression types |
+|---|---|---|
+| warm | 1-3 of N | `a + b`, `a - b`, `a × b`, `24 / 6` |
+| sharp | 4-5 of N | `(a + b) × c`, `a × b - c`, `q / c + s` |
+| brain melt | 6-7 of N | `(a × b) - (c × d)`, `(a + b) × c - d`, division chains |
 
 ### Scan challenge
 
-The scan screen opens the camera, loads the on-device detector, and asks for
-one object. Every clear detection is boxed and labeled, and the requested
-object and its accepted similar labels turn green. A hold meter fills while
-the target stays visible and drains at 1.25 times speed when it disappears.
-The gate clears at a continuous 3-second hold. The HUD has a torch toggle, a
-tips sheet, and (for trials) a Shuffle button that rerolls the target. The
-target card, meter halo, and detection chips animate as the scene changes. If
-the camera is unavailable, the screen reports the problem instead of pretending
-the gate passed.
+Opens camera, loads TFLite detector on-demand, asks for one object. Target and similar labels turn green. Hold meter fills at 3 continuous seconds. HUD has torch toggle, tips sheet, and Shuffle button (trial mode). Camera unavailable shows error instead of silent pass.
 
 ### Streaks and trials
 
-The streak screen reads the statistics stored by completed challenges. The
-trial tiles on the home screen open the same math and scan screens with a
-temporary alarm, so you can test the gates without waiting for a real alarm.
-Trials use id `0` and deliberately do not change total wins, math wins, scan
-wins, or the streak. The success screen says "Trial cleared" and "stats
-unchanged" so the difference is explicit.
+Streak screen reads statistics. Trial tiles on home open math/scan screens with a temporary alarm (id 0). Trials don't modify wins or streaks. Success screen shows "Trial cleared" with "stats unchanged".
 
 ---
 
 ## How to set up an alarm
 
-1. Open Bangun and tap "Add alarm".
-2. Set the hour and minute. Tap the large time if you prefer the system time
-   picker.
-3. Choose once, every day, or the weekdays you want.
-4. Choose the challenge. For math, choose 3, 5, or 7 problems. For scan,
-   choose one or more target objects.
-5. Choose a sound:
-   - A built-in tone.
-   - "Own file" to pick an audio file from the phone. Bangun copies it into
-     the app documents directory immediately, so the alarm still works after
-     the original file or permission disappears.
-   - Spotify, then paste a track, playlist, artist, or album link.
-6. Adjust the volume if needed.
-7. Tap "Test this tone" to hear the built-in tone or file, or to run the
-   Spotify handoff.
+1. Open awake and tap "Add alarm".
+2. Set hour and minute.
+3. Choose repeat: once, daily, or specific weekdays.
+4. Choose challenge: math (3/5/7 problems), scan (select objects), or both at ring time.
+5. Choose a sound: built-in tone, "Own file", or Spotify link.
+6. Adjust volume if needed.
+7. Tap "Test this tone" to preview.
 8. Tap "Create alarm".
 
-To change an alarm, tap its row on the home screen, edit the fields, and tap
-"Save changes". To remove it, open it and tap the delete control.
+To edit: tap an alarm row, modify fields, tap "Save changes". To delete: open alarm and tap delete.
 
 ---
 
@@ -204,164 +114,80 @@ To change an alarm, tap its row on the home screen, edit the fields, and tap
 
 ### Built-in tones
 
-Four synthesized WAV files live in `assets/sounds/`. They are generated by
-`tools/gen_sounds.dart`. The names are Morning bricks, Twin chime, Siren rush,
-and Digital chirp.
+Four WAV files in `assets/sounds/`: Morning bricks, Twin chime, Siren rush, Digital chirp. Generated by `tools/gen_sounds.dart`.
 
 ### Local audio file
 
-The file picker opens the Android document picker. Bangun checks the size, then
-streams a copy named `tone_<timestamp>.<ext>` into the app's documents
-directory. Files above 25 MB are rejected with a readable message, and the copy
-is made without loading the whole file into memory. Preview and ring time both
-use the durable copy. The original file can be moved or deleted without
-breaking the alarm.
+Uses Android document picker. Files are streamed as `tone_<timestamp>.<ext>` into app documents. Files over 25 MB are rejected. The durable copy survives original file deletion or permission loss. The reliability card names affected alarms; editor blocks saving until a valid file or alternative tone is chosen.
 
-A custom file can still disappear later because of a storage cleaner or a
-manual delete. When that happens, Bangun falls back to the alarm's built-in
-tone instead of failing to schedule or ringing in silence. The home
-reliability card shows which alarm is affected, and the editor blocks that file
-alarm from saving until a new file is picked or another tone is chosen. Files
-that no alarm references are swept on boot.
+Orphaned files are swept on boot.
 
 ### Spotify
 
-A Spotify alarm uses the gentle Twin chime as its native underlay. The siren is
-never used for Spotify alarms. The link is opened inside the Spotify app and
-Bangun tries to press play through three paths:
+A Spotify alarm uses Twin chime as a native underlay. The handoff tries:
+1. Spotify's live media controller (requires notification access)
+2. Play/resume in Spotify's media notification (requires notification access)  
+3. Android's `MEDIA_PLAY_FROM_SEARCH` intent (no notification access required)
 
-1. Spotify's live media controller.
-2. The play or resume action inside Spotify's own media notification.
-3. Android's `MEDIA_PLAY_FROM_SEARCH` intent with the Spotify item URI.
+Bangun retries for up to 45 seconds while the phone starts Spotify. A silent full-screen notification keeps the gate visible during handoff.
 
-The first two require notification access. The third does not. Bangun keeps
-retrying for up to 45 seconds while a cold phone starts Spotify. After Spotify
-or a browser takes the foreground, Bangun brings the ring screen back on top
-with a silent alarm-category full-screen notification, so the gate stays
-visible while the music plays underneath.
+Supported link forms:
+- `open.spotify.com/track`, `playlist`, `album`, `artist`
+- Locale paths (`/intl-xx/`) and tracking parameters
+- Native `spotify:` URIs for the four kinds
+- `spotify.link` short links
+- Trailing `:play` handled without duplication
 
-Supported link forms include real `open.spotify.com` playlist, track, album,
-and artist links, links with `/intl-xx/` locale paths, links with tracking query
-parameters, native `spotify:` item URIs for those four kinds, and Spotify short
-links such as `spotify.link`. A trailing `:play` is handled without being
-duplicated. A link on any other host, a lookalike host such as
-`open.spotify.com.example`, a Spotify search page, or a malformed native URI is
-rejected before it can reach the ring handoff.
+Unsupported: other hosts, lookalike hosts (e.g., `open.spotify.com.example`), search pages, malformed URIs — all rejected before ring handoff.
 
-If Spotify is missing, paused, offline, or restricted by the account, the twin
-chime keeps the alarm audible and the ring UI still works.
+If Spotify is missing, paused, offline, or restricted, the twin chime keeps the alarm audible.
 
 ---
 
 ## The math gate in detail
 
-Problems are generated by `lib/data/math_engine.dart`. The engine uses an
-exclusion set so a session never repeats a problem and ramps difficulty across
-the configured count:
+Generated by `lib/data/math_engine.dart`. Uses an exclusion set—no repeated problems—and ramps difficulty across the set count.
 
-| Difficulty | Typical position | Expression style |
-|---|---|---|
-| warm | problems 1 to 3 of 7 | `a + b`, `a - b`, `a x b`, `24 / 6` |
-| sharp | problems 4 to 5 of 7 | `(a + b) x c`, `a x b - c`, `q / c + s` |
-| brain melt | problems 6 to 7 of 7 | `(a x b) - (c x d)`, `(a + b) x c - d`, mixed division chains |
+Division always divides exactly. Subtraction is range-ordered so answers never become negative. The engine is integer-safe by construction.
 
-The engine is integer safe by construction. Division always divides exactly,
-and subtraction is range ordered so the answer never becomes negative.
-`test/math_engine_test.dart` stress-tests the invariants over hundreds of
-generated problems.
+**Verification:** `test/math_engine_test.dart` stress-tests invariants over hundreds of problems.
 
 ---
 
 ## The scan gate in detail
 
-- Model: `assets/models/coco_ssd_mobilenet_v1_1.0_quant.tflite`. It is an SSD
-  MobileNet v1 detector with COCO labels, quantized uint8 input at 300 by 300
-  by 3, and 10 post-NMS detections.
-- Classes: the label asset has 91 lines: a leading `???` placeholder, 80 named
-  COCO classes, and 10 unused indexes. All 80 named classes are selectable in
-  the editor. `glass` and `screen` are extra composite prompts built on top of
-  the real classes.
-- Picker: the target picker groups objects into Common, All, Food, Home, Tech,
-  Outdoors, Animals, and People. Search covers all groups, selected targets
-  stay at the front, and Select common and Clear give one-tap control. The
-  selected count and a warning keep an empty pool from being saved.
-- Camera: YUV420 frames are throttled to about 9 frames per second. Each frame
-  is center cropped to a square with a fixed-point BT.601 conversion, adjusted
-  for sensor rotation, then passed to the interpreter as raw 0 to 255 bytes.
-  The RGB buffer is reused between frames instead of allocating 270 KB each
-  time.
-- Drawing: every clear detection carries a bounding box. The painter draws a
-  rounded rectangle and a small label pill over the live preview. The target
-  and its accepted similar labels turn green; other clear objects stay white
-  so the screen shows everything the model sees. The preview and overlay are
-  wrapped in repaint boundaries, and the painter only repaints when its boxes
-  actually change.
-- Synonyms: the COCO map is coarse, so the gate uses a similarity map. Asking
-  for a cup accepts a wine glass or bottle. The `glass` target accepts cup,
-  wine glass, and bottle. The `screen` target accepts tv, laptop, and cell
-  phone. The map is `kSimilarScanTargets` in `lib/data/models.dart`.
-- Target choice: new alarms start with a broad pool of common room objects.
-  Both trial runs and normal alarms randomize the target, preferring easy
-  objects that are normally nearby, such as a glass, a screen, a phone, or a
-  book. Harder classes are only used as fallback. Old cup-only records are
-  expanded once to the common pool; a deliberate cup-only choice made after
-  this update is kept.
-- Loading: the scan screen loads the detector on demand and retries if the
-  first load fails. It shows a loading line and a retry card instead of sitting
-  silently at 0 percent.
-- Interaction: the HUD has a torch toggle, a tips sheet, and a Shuffle button
-  on trial runs. The target card swaps with a scale and slide animation, the
-  hold meter pulses green while the target is confirmed, and detection chips
-  pop in as objects enter the frame.
-- Meter: the 100 percent meter measures hold time, not model confidence. A
-  matching frame adds presence weighted by score (`0.4 + score`), a miss decays
-  at 1.25 times speed, and a single frame can add at most 400 milliseconds. The
-  gate clears at a continuous 3-second hold. Only detections at 0.60
-  confidence with a plausible box area count, and a label must appear in two
-  nearby frames before it adds hold time. Placeholder `???` classes,
-  `unknown` labels, and tiny background boxes are filtered. The overlay and
-  chip strip show every clear detection, up to the model's 10-box limit.
+- **Model**: `assets/models/coco_ssd_mobilenet_v1_1.0_quant.tflite`. SSD MobileNet v1, quantized uint8 300×300×3 input, 10 post-NMS detections.
+- **Classes**: 91-line label asset (1 placeholder `???`, 80 COCO classes, 10 unused). Plus `glass` and `screen` composite targets.
+- **Picker**: Groups: Common, All, Food, Home, Tech, Outdoors, Animals, People. Search, selected targets at front, Select Common and Clear actions. Empty pools are blocked from saving.
+- **Camera**: YUV420 throttled to ~9 fps, center-cropped to square, BT.601 fixed-point conversion, adjusted for sensor rotation, passed as 0-255 bytes. RGB buffer reused (no 270 KB allocations per frame).
+- **Drawing**: Rounded rectangles with label pills over live preview. Target and similar labels turn green; other detections stay white. Repaint boundaries on preview and overlay.
+- **Synonyms**: `glass` → cup, wine glass, bottle, bowl. `screen` → tv, laptop, phone. Configurable in `lib/data/models.dart`.
+- **Target choice**: New alarms start with common objects (cup, screen, phone, book). Trials and normal alarms randomize every ring, preferring nearby items. Old cup-only records migrate once.
+- **Loading**: On-demand with retry. Shows loading/failure states.
+- **Interaction**: HUD has torch toggle, tips sheet, Shuffle (trial mode). Animations: scale/slide for target card, pulse for hold meter, chip pop-ins.
+- **Meter**: Hold time not confidence. Matching frame adds `0.4 + score` (max 0.4 per frame), misses decay at 1.25× speed. Requires 3-second continuous hold. Filter: ≥0.60 confidence, plausible box area, label appears in two nearby frames. Shows all detections up to 10-box limit.
 
 ---
 
 ## Permissions and reliability
 
-Grant these on first run:
+Grant on first run:
 
-- **Notifications** (Android 13 and newer). Without them Android will not show
-  the alarm notification or launch the full-screen ring screen.
-- **Exact alarms**. Bangun declares both `SCHEDULE_EXACT_ALARM` and
-  `USE_EXACT_ALARM`, which is allowed for alarm clock apps. The home
-  reliability card also checks this state and opens the correct system page if
-  it is ever revoked.
-- **Camera**. Required only for the scan gate. Frames are processed on the
-  device and are never stored or uploaded. If camera access is permanently
-  denied, the scan screen offers a button that opens Android's app settings
-  and retries automatically when you return.
-- **Full-screen notifications**. On Android 14 and newer the user must allow
-  this once for Bangun. The home reliability card detects the blocked state
-  and opens the correct settings page.
-- **Notification access**. Required only for Spotify alarms, so Bangun can
-  press play on Spotify's media session and notification. It is granted once
-  under Settings, Notifications, Device and app notifications, Bangun media
-  control.
+- **Notifications** (Android 13+). Without them, the alarm notification won't show.
+- **Exact alarms**. `SCHEDULE_EXACT_ALARM` and `USE_EXACT_ALARM` declared (alarm-clock purpose). Reliability card monitors and offers correct settings page.
+- **Camera**. Required for scan gate. No frames stored or uploaded. Permanent denial opens app settings and auto-retries on resume.
+- **Full-screen notifications** (Android 14+). Must be allowed once. Reliability card detects blocked state.
+- **Notification access**. Required for Spotify playback. Granted once in Settings → Notifications → Device and app notifications → awake media control.
 
-Battery optimizations can still delay or kill background alarms on some
-phones. On Xiaomi, OPPO, vivo, and Huawei devices, allow autostart for Bangun
-and disable battery optimization for it.
+Battery optimizations on Xiaomi, OPPO, vivo, Huawei may still delay alarms. Allow autostart and disable battery optimization for awake on those devices.
 
-The app guards against corrupted stored data. A malformed alarm or statistics
-entry cannot crash app boot; the loader falls back to an empty state. A
-missing custom tone is detected before scheduling, falls back to the built-in
-tone, and is surfaced on the home reliability card. The ring screen also
-watches the repository, so a cold start that beats the SharedPreferences load
-still shows the challenge buttons instead of a dead ring sheet.
+Guardrails prevent crashes from corrupted data: malformed alarms load with fallback defaults; missing custom tones fall back to built-in and appear on reliability card.
 
 ---
 
 ## How to build and run
 
-Prerequisites: Flutter 3.4x, Android SDK 36, and JDK 17.
+Prerequisites: Flutter 3.4x, Android SDK 36, JDK 17.
 
 ```bash
 flutter pub get
@@ -371,45 +197,36 @@ flutter build apk --debug
 flutter build apk --release
 ```
 
-The debug APK is written to `build/app/outputs/flutter-apk/app-debug.apk`.
-The release APK is written to `build/app/outputs/flutter-apk/app-release.apk`.
-Install either one with:
+Artifacts:
+- Debug: `build/app/outputs/flutter-apk/app-debug.apk`
+- Release: `build/app/outputs/flutter-apk/app-release.apk`
 
+Install:
 ```bash
-adb install -r build/app/outputs/flutter-apk/app-debug.apk
 adb install -r build/app/outputs/flutter-apk/app-release.apk
 ```
 
-Release builds apply `android/app/proguard-rules.pro`. Those rules keep the
-Kotlin runtime and the Pigeon JNI registrars used by `shared_preferences_android`
-2.5.x. Without them, R8 renames `kotlin.coroutines.Continuation` and removes
-`kotlin.Result`, so the release app throws from `Alarm.init()` and never loads
-the scan model.
+Release builds apply `android/app/proguard-rules.pro`. Those keep the Kotlin runtime and Pigeon JNI registrars used by `shared_preferences_android` 2.5. Without them, R8 renames `kotlin.coroutines.Continuation` and removes `kotlin.Result`, causing `Alarm.init()` to throw.
 
-To regenerate the built-in ring tones after editing the generator:
-
+Regenerate built-in tones:
 ```bash
 dart tools/gen_sounds.dart
 ```
 
-The test suite currently has 66 tests covering the math engine, scan geometry,
-scan target selection and migration, detector label mapping and box filtering,
-Spotify link validation, alarm model normalization, and missed one-time alarm
-handling. `flutter analyze` must report no issues. Debug and release APK builds
-are also part of the verification pass.
+**Test suite:** 66 tests covering math engine, scan geometry, target selection, detector labels, Spotify validation, alarm models, missed one-time alarms. `flutter analyze` must report no issues. Debug and release APKs build are part of verification.
 
 ---
 
-## Where things live
+## Project structure
 
 ```
 lib/main.dart                  App shell, ring routing, text-scale clamp
-lib/core/palette.dart          Blue and white design tokens
+lib/core/palette.dart          awesme design tokens
 lib/core/widgets.dart          Shared cards, pills, and status rows
 lib/core/format.dart           Time and duration formatting
-lib/data/models.dart           Alarm model, tone model, Spotify link validation
+lib/data/models.dart           Alarm model, tone model, Spotify validation
 lib/data/alarm_repository.dart Alarm storage, native scheduling, ring events
-lib/data/tone_files.dart       Durable custom tone copy, cleanup, orphan sweep
+lib/data/tone_files.dart       Durable tone copy, cleanup, orphan sweep
 lib/data/math_engine.dart      Math problem generator
 lib/data/media_control.dart    Dart bridge to Android media and settings
 lib/data/spotify_launch.dart   Spotify start, retry, and keep-playing logic
@@ -421,142 +238,34 @@ lib/screens/math_challenge_screen.dart
 lib/screens/scan_challenge_screen.dart
 lib/screens/success_screen.dart Celebration and trial-mode copy
 lib/screens/streak_screen.dart
-assets/sounds/                Built-in WAV tones
-assets/models/                COCO-SSD TensorFlow Lite model
+assets/sounds/                 Built-in WAV tones
+assets/models/                 COCO-SSD TensorFlow Lite model
 android/app/src/main/kotlin/com/example/bangun/MainActivity.kt
                               Platform channel, full-screen settings,
                               Spotify playback strategies, bring-back cleanup
 android/app/src/main/kotlin/com/example/bangun/MediaControlListenerService.kt
-                              Notification listener used for media control
+                              Notification listener for media control
 test/                         Math, scan, Spotify, and alarm model tests
 tools/gen_sounds.dart         Ring tone generator
 ```
 
 ---
 
-## Audit findings and fixes
+## Known limitations
 
-A full pass over the app found a set of reliability, data, and honesty issues.
-The highest-impact ones are fixed in this version.
-
-- Trial runs used to be recorded in the real wake statistics. Alarm id `0` now
-  bypasses stats completely, and the success screen states that the stats did
-  not change.
-- A corrupt statistics record could throw a cast error during boot. The loader
-  now catches every object, not just `Exception`, and starts from an empty
-  stats state.
-- Runtime permission prompts could stack on top of a ring screen when the app
-  was launched by an alarm. Prompts are now skipped while an alarm is active.
-- A deleted custom tone could fail scheduling or ring in silence. Scheduling
-  now falls back to the built-in tone, the home card names the affected alarm,
-  the editor blocks that file alarm from saving until a file is picked or
-  another tone is chosen, and orphaned tone files are swept on boot.
-- File picking loaded the entire audio file into memory. It now streams a copy
-  and rejects files above 25 MB.
-- A missed one-time alarm could be re-armed for the next day. A boot and
-  host-drop check now retires a one-shot whose slot passed while the app was
-  not running.
-- A cold start could show the ring screen before the repository finished
-  loading, leaving no challenge buttons. The ring screen now watches the
-  repository and retries the Spotify handoff for a short window.
-- Replacing the ring route with a challenge could allow a duplicate ring
-  screen on resume. The route tracker now spans the ring, gate, and success
-  screens.
-- The success screen's auto-pop timer could pop a ring screen that arrived
-  during the celebration. It now pops only when its own route is current.
-- The Spotify fast path could resume yesterday's audio and report success
-  before the configured item was opened. It now always opens the configured
-  item and verifies the actual playing state.
-- Any non-empty text could be saved as a Spotify link and later open a browser
-  behind the alarm. Links are now checked against real Spotify hosts, with an
-  inline editor error, and the ring handoff rejects an invalid link.
-- A failed alarm save left the save button disabled forever. Save errors are
-  now caught, reported in a SnackBar, and the button is restored.
-- Permanent camera denial left the scan screen in a request loop. The screen
-  now opens app settings and retries when the app resumes.
-- The model defaulted to four math problems while the editor offered only 3, 5,
-  or 7. New alarms default to 3, and old four-problem records normalize to 3.
-- The bring-back notification could linger in the shade after the app returned.
-  It is cancelled when MainActivity resumes.
-- Exact alarm state was not visible in the app. The reliability card now
-  checks it and offers the correct settings action.
-- Release builds were broken at startup. R8 renamed
-  `kotlin.coroutines.Continuation` and removed `kotlin.Result`, which broke the
-  Pigeon JNI lookups inside `shared_preferences_android` 2.5.x. `Alarm.init()`
-  threw and boot stopped before the scan model loaded. `proguard-rules.pro` now
-  keeps the Kotlin runtime and the JNI registrars. A release smoke test shows
-  no `Alarm.init` failure and logs `CocoDetector ready`.
-- Scan targets were effectively hard-coded to cup: the trial pool and editor
-  default were cup-only, and the picker hid everything after the first 28
-  entries. New alarms get the broad common-object pool, trials randomize on
-  every run, old cup-only records migrate once, and every target is selectable.
-- The scan gate could stay at 0 percent with no explanation when the model did
-  not load. It now loads and retries the detector on demand, shows loading and
-  failure states, and decays misses more gently. The detector shows every clear
-  detection at 0.60 confidence, filters `???`/`unknown` labels and tiny boxes,
-  requires two nearby frames before adding hold time, and highlights the target
-  while leaving other real objects visible.
-- The detector's class IDs were off by one. The TFLite model emits 0-based
-  COCO IDs, while the 91-line label asset starts with a placeholder, so cats
-  were shown as birds and cups as wine glasses. The mapping now shifts by one,
-  a regression test checks the real label asset, and a runtime guard refuses to
-  load a shifted map. The home and scan footers show the build stamp
-  (`v1.0.2 build 3`) so a stale APK is obvious during testing.
-- Bottom actions and long content could crowd the system navigation area. The
-  editor now has a fixed safe-area footer, the ring lock sheet scrolls inside a
-  height cap, success stats respect the bottom inset, and the scan HUD adapts to
-  short screens. Page changes use Material 3 fade-forward transitions.
-- The home header could clip its tagline or squeeze the streak badge on narrow
-  phones. The title and streak badge now wrap, the tagline gets two lines, and
-  the scan header scales the target name instead of overflowing.
-
-Verification for this pass: `flutter analyze` reports no issues, 66 tests pass,
-and the debug and release APKs build successfully.
+- Scan gate recognizes only 80 named COCO classes. For a very specific branded object, pick a nearby class; the synonym map handles close variants.
+- Detection quality in the dark, at extreme angles, or on reflective surfaces is unmeasured. The hold meter is intentionally forgiving.
+- A printed photo or screen image can satisfy the scan gate. The gate is a deterrent and routine builder, not a cryptographic proof.
+- A scan-only alarm on broken/blocked/permanently denied camera has no in-app escape. Use a mix alarm if the camera is unreliable.
+- Time zone changes or daylight-saving jumps can shift an occurrence. The next repeat is scheduled correctly.
+- Android force-stop cancels scheduled alarms until the app is opened again. Normal process death, reboot, and lock screen are handled.
+- Some Xiaomi, OPPO, vivo, Huawei devices may still delay or kill alarms. Autostart and battery optimization settings are not optional on those phones.
+- System text scaling clamped at 1.12 to keep layouts usable. Users needing very large text will not get their full preferred scale.
+- Old trial runs may exist in legacy stats. Statistics are device-local; no migration can reliably distinguish old trial wins from real ones.
+- iOS is not configured in this build. Focus remains on Android lock-down behavior.
 
 ---
 
-## Known limitations
+## Android package info
 
-- The scan gate only knows the 80 named COCO classes in the model's 90-slot
-  map. A very specific branded object is outside the model. Pick a nearby
-  class; the synonym map covers close variants such as cup, wine glass, bottle,
-  bowl, tv, laptop, and cell phone.
-- Detection quality in the dark, at extreme angles, or on reflective surfaces
-  is unmeasured. The hold meter is intentionally forgiving, but this is not a
-  scientific benchmark. The paper discusses this threat to validity.
-- A printed photo or another screen showing the target can satisfy the scan
-  gate. The gate is a deterrent and a routine builder, not a cryptographic
-  proof that you are awake.
-- A scan-only alarm on a phone with a broken, blocked, or permanently denied
-  camera has no in-app escape. This is the deliberate cost of having no stop
-  button. Force-stop or reboot is the last resort. Use a mix alarm if the camera
-  is not dependable.
-- A time zone change or a daylight-saving jump can shift one occurrence. The
-  next repeating alarm is scheduled with the local clock again after that
-  occurrence.
-- Android force-stop cancels scheduled alarms until the app is opened again.
-  Normal process death, reboot, and lock screen are handled; force-stop is not.
-- Aggressive battery savers on some Xiaomi, OPPO, vivo, and Huawei builds can
-  still delay or kill background alarms. The autostart and battery advice above
-  is not optional on those phones.
-- The app clamps system text scaling at 1.12 to keep the ring and challenge
-  layouts usable. This is a tradeoff: users who rely on very large system text
-  do not get their full preferred scale.
-- Trial runs completed before this fix may already be present in old stats.
-  Statistics are local to the device, and no migration can reliably tell an old
-  trial win from a real one.
-- True Spotify playback could not be observed on the Android emulator because
-  Spotify was not installed there. The real handoff needs a physical phone and
-  notification access to verify end to end.
-- Spotify autoplay depends on notification access and on Spotify publishing a
-  media session. Without the grant, the item still opens in Spotify, but the
-  user may need to tap play once while the twin chime keeps guarding the
-  wake-up.
-- An artist link opens the artist page, not a single track. Autoplay is
-  best-effort for an artist link. Use a track, album, or playlist when
-  guaranteed music matters.
-- A free Spotify account or a regional restriction can limit autoplay even
-  when the handoff succeeds. Bangun reports the real outcome in the editor's
-  test message.
-- iOS is not configured in this build. The `alarm` plugin supports it, but the
-  Android lockdown behavior is the focus.
+Application ID: `com.example.bangun` (internal Android identifier; this package name is used for the `alarm` plugin's broadcast receivers and notification channels). Users install the APKs from this package; renaming would require full re-packaging.

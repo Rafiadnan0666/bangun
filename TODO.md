@@ -1,4 +1,4 @@
-# Bangun — To-Do (user requests, verbatim-checked)
+# awake — To-Do (user requests, verbatim-checked)
 
 ## 1. Sound settings — test button
 - [x] Add a "test the sound" option in the alarm editor sound card.
@@ -54,5 +54,5 @@
   bars in the header; play/stop are real Material icons (no orange emoji ▶).
 
 ## 8. Git — ✅ pushed
-- `github.com/Rafiadnan0666/bangun` main branch (0e7ab64..950a1de);
+- `github.com/Rafiadnan0666/awake` main branch (0e7ab64..950a1de);
   `/paper/` excluded via `.gitignore`.

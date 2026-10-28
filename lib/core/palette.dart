@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-/// Bangun design tokens — a strict blue-and-white system: white surfaces on
+/// awake design tokens — a strict blue-and-white system: white surfaces on
 /// a pale blue canvas, blue family for every accent, chunky rounded type.
 /// Red only marks destructive actions and green marks wins; everything else
 /// is blue, so the brand reads instantly.
@@ -88,7 +88,7 @@ class GradientText extends StatelessWidget {
   }
 }
 
-ThemeData bangunTheme() {
+ThemeData awakeTheme() {
   final scheme =
       ColorScheme.fromSeed(
         seedColor: Bg.ctaA,

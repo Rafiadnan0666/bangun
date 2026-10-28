@@ -49,3 +49,6 @@ app.*.map.json
 
 # Research manuscripts stay off the repo (user request)
 /paper/
+
+# COCO images and annotations stay local (about 780 MB)
+/ml/data/
