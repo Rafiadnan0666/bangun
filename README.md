@@ -1,4 +1,4 @@
-# awake
+# Awake
 
 Awake is a non-dismissable Android alarm clock that stops only when you complete a challenge: solve math problems or scan a real object. All detection runs on-device using TensorFlow Lite. No data leaves your phone.
 
