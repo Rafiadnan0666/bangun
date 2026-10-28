@@ -328,7 +328,7 @@ class AlarmRepository extends ChangeNotifier {
       androidAlarmClock: true,
       payload: '${a.id}',
       notificationSettings: NotificationSettings(
-        title: '⏰ Bangun — ${hhmm(a.hour, a.minute)}',
+        title: '⏰ awake — ${hhmm(a.hour, a.minute)}',
         body: '${a.label} · beat the challenge to stop',
         stopButton: null,
         androidSnoozeButton: null,
