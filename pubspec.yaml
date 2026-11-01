@@ -1,4 +1,4 @@
-name: awake
+name: bangun
 description: "Awake: alarms you stop with a scan or a math grind. All ML runs on-device."
 publish_to: 'none'
 version: 1.0.2+3
