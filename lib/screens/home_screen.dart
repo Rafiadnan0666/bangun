@@ -170,7 +170,7 @@ class _Header extends StatelessWidget {
                 runSpacing: 4,
                 children: [
                   const Text(
-                    'Bangun.',
+                    'Awake.',
                     style: TextStyle(
                       fontSize: 27,
                       fontWeight: FontWeight.w900,
