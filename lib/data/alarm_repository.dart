@@ -1,6 +1,6 @@
 /// Alarm state + scheduling glue.
 ///
-/// Owns the local [BangunAlarm] list, syncs every enabled alarm into the
+/// Owns the local [AwakeAlarm] list, syncs every enabled alarm into the
 /// native `alarm` plugin (exact next occurrence), tracks the ringing alarm id,
 /// and records wake statistics.
 ///
@@ -39,24 +39,24 @@ class AlarmRepository extends ChangeNotifier {
 
   SharedPreferences? _prefs;
 
-  List<BangunAlarm> _alarms = const [];
-  List<BangunAlarm> get alarms => List.unmodifiable(_alarms);
+  List<AwakeAlarm> _alarms = const [];
+  List<AwakeAlarm> get alarms => List.unmodifiable(_alarms);
 
   WakeStats stats = WakeStats();
 
   int? _ringingId;
   int? get ringingId => _ringingId;
-  BangunAlarm? get ringing {
+  AwakeAlarm? get ringing {
     final id = _ringingId;
     return id == null ? null : byId(id);
   }
 
-  BangunAlarm? byId(int id) =>
+  AwakeAlarm? byId(int id) =>
       id == trialAlarmId ? null : _alarms.where((a) => a.id == id).firstOrNull;
 
   /// Nearest enabled alarm and when it next rings.
-  (BangunAlarm?, DateTime?) get nextOnAlarm {
-    BangunAlarm? best;
+  (AwakeAlarm?, DateTime?) get nextOnAlarm {
+    AwakeAlarm? best;
     DateTime? bestAt;
     for (final a in _alarms) {
       if (!a.enabled) continue;
@@ -140,7 +140,7 @@ class AlarmRepository extends ChangeNotifier {
     if (raw != null && raw.isNotEmpty) {
       try {
         final list = (jsonDecode(raw) as List)
-            .map((e) => BangunAlarm.fromJson(Map<String, dynamic>.from(e)))
+            .map((e) => AwakeAlarm.fromJson(Map<String, dynamic>.from(e)))
             .toList();
         _alarms = list;
       } on Object {
@@ -176,7 +176,7 @@ class AlarmRepository extends ChangeNotifier {
 
   // ---- CRUD -----------------------------------------------
 
-  Future<void> create(BangunAlarm alarm) async {
+  Future<void> create(AwakeAlarm alarm) async {
     var id = alarm.id;
     while (_alarms.any((x) => x.id == id)) {
       id = (id + 1) % 2147483000;
@@ -191,7 +191,7 @@ class AlarmRepository extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> update(BangunAlarm alarm) async {
+  Future<void> update(AwakeAlarm alarm) async {
     final old = byId(alarm.id);
     _alarms = [for (final a in _alarms) a.id == alarm.id ? alarm : a];
     await _persist();
@@ -277,7 +277,7 @@ class AlarmRepository extends ChangeNotifier {
   }
 
   /// Schedules the alarm's next occurrence with the native plugin.
-  Future<bool> _syncToPlugin(BangunAlarm a) async {
+  Future<bool> _syncToPlugin(AwakeAlarm a) async {
     final when = a.nextOccurrence();
     try {
       return await Alarm.set(alarmSettings: _settingsFor(a, when));
@@ -289,7 +289,7 @@ class AlarmRepository extends ChangeNotifier {
 
   /// Builds native settings. Key honesty detail: volume never drops below
   /// 0.35, so a "cannot be closed" alarm is always audible.
-  AlarmSettings _settingsFor(BangunAlarm a, DateTime when) {
+  AlarmSettings _settingsFor(AwakeAlarm a, DateTime when) {
     final asset = switch (a.toneKind) {
       ToneKind.builtin => a.tone.assetPath,
       // The editor copies picked files into app documents, but a file can

@@ -24,7 +24,7 @@ import 'success_screen.dart';
 class ScanChallengeScreen extends StatefulWidget {
   const ScanChallengeScreen({super.key, required this.alarm, this.chosenKind});
 
-  final BangunAlarm alarm;
+  final AwakeAlarm alarm;
   final ChallengeKind? chosenKind;
 
   @override
@@ -439,7 +439,7 @@ class _ScanChallengeScreenState extends State<ScanChallengeScreen>
                 title: 'Camera permission needed',
                 body: _permissionPermanentlyDenied
                     ? 'Camera access is blocked. Open Android Settings, choose '
-                          'Permissions, then allow Camera for Bangun.'
+                          'Permissions, then allow Camera for Awake.'
                     : 'The scan gate runs on-device and needs the camera. Your '
                           'frame is processed locally, nothing is uploaded.',
                 actionLabel: _permissionPermanentlyDenied

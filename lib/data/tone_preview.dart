@@ -40,7 +40,7 @@ final class TonePreview {
   ///
   /// Returns null for local playback (built-in tone / picked file), or the
   /// Spotify start result when the alarm uses a Spotify link.
-  static Future<SpotifyStart?> test(BangunAlarm alarm) async {
+  static Future<SpotifyStart?> test(AwakeAlarm alarm) async {
     _init();
     if (alarm.toneKind == ToneKind.spotify) {
       final result = await startSpotify(alarm.spotifyUrl ?? '');

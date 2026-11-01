@@ -16,7 +16,7 @@ import 'success_screen.dart';
 class MathChallengeScreen extends StatefulWidget {
   const MathChallengeScreen({super.key, required this.alarm, this.chosenKind});
 
-  final BangunAlarm alarm;
+  final AwakeAlarm alarm;
 
   /// Which gate the user picked when the alarm rang (math or scan).
   final ChallengeKind? chosenKind;

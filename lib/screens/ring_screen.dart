@@ -38,7 +38,7 @@ class RingScreen extends StatefulWidget {
 class _RingScreenState extends State<RingScreen>
     with SingleTickerProviderStateMixin, WidgetsBindingObserver {
   late final AnimationController _spin;
-  BangunAlarm? _alarm;
+  AwakeAlarm? _alarm;
   bool _spotifyAccess = true;
   bool _spotifyPlaying = false;
   Timer? _spotifyWatch;
@@ -292,7 +292,7 @@ class _LockSheet extends StatelessWidget {
     required this.onAllowSpotify,
   });
 
-  final BangunAlarm? alarm;
+  final AwakeAlarm? alarm;
   final bool spotifyAccess;
   final bool spotifyPlaying;
   final VoidCallback onMath;

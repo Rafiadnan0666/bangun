@@ -26,7 +26,7 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   String _filter = 'all'; // all | on | off
 
-  List<BangunAlarm> get _visible {
+  List<AwakeAlarm> get _visible {
     final repo = context.watch<AlarmRepository>();
     return repo.alarms.where((a) {
       return switch (_filter) {
@@ -37,7 +37,7 @@ class _HomeScreenState extends State<HomeScreen> {
     }).toList();
   }
 
-  BangunAlarm _trial(ChallengeKind kind) => BangunAlarm(
+  AwakeAlarm _trial(ChallengeKind kind) => AwakeAlarm(
     id: trialAlarmId,
     label: 'Trial run',
     hour: DateTime.now().hour,
@@ -122,7 +122,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 }
 
-void _launchChallenge(BuildContext context, BangunAlarm alarm) {
+void _launchChallenge(BuildContext context, AwakeAlarm alarm) {
   if (alarm.challengeKind == ChallengeKind.scan) {
     Navigator.of(context).push(
       MaterialPageRoute<void>(
@@ -170,7 +170,7 @@ class _Header extends StatelessWidget {
                 runSpacing: 4,
                 children: [
                   const Text(
-                    'Bangun.',
+                    'Awake.',
                     style: TextStyle(
                       fontSize: 27,
                       fontWeight: FontWeight.w900,
@@ -216,7 +216,7 @@ class _Header extends StatelessWidget {
 class _HeroNextAlarm extends StatelessWidget {
   const _HeroNextAlarm({required this.alarm, required this.nextAt});
 
-  final BangunAlarm? alarm;
+  final AwakeAlarm? alarm;
   final DateTime? nextAt;
 
   @override
@@ -307,7 +307,7 @@ class _StatusCard extends StatelessWidget {
     required this.stats,
   });
 
-  final BangunAlarm? alarm;
+  final AwakeAlarm? alarm;
   final DateTime? nextAt;
   final WakeStats stats;
 
@@ -422,7 +422,7 @@ class _ReliabilityCardState extends State<_ReliabilityCard>
     final hasSpotify = repo.alarms.any(
       (a) => a.enabled && a.toneKind == ToneKind.spotify,
     );
-    BangunAlarm? missingTone;
+    AwakeAlarm? missingTone;
     for (final a in repo.alarms) {
       if (a.enabled &&
           a.toneKind == ToneKind.file &&
@@ -482,7 +482,7 @@ class _ReliabilityCardState extends State<_ReliabilityCard>
               const SizedBox(height: 6),
               _line(
                 'Exact alarms are off. Android may delay the ring or skip it '
-                    'when the phone is idle. Allow exact alarms for Bangun.',
+                    'when the phone is idle. Allow exact alarms for Awake.',
                 'Allow exact alarms',
                 () async {
                   final status = await Permission.scheduleExactAlarm.status;
@@ -501,7 +501,7 @@ class _ReliabilityCardState extends State<_ReliabilityCard>
               _line(
                 'Full-screen alarms are off. The ring screen will not cover '
                     'the lock screen at alarm time. Allow full-screen '
-                    'notifications for Bangun.',
+                    'notifications for Awake.',
                 'Allow full-screen',
                 () async {
                   await MediaControl.openFullScreenIntentSettings();
@@ -665,7 +665,7 @@ class _FilterTabs extends StatelessWidget {
 class _AlarmRow extends StatelessWidget {
   const _AlarmRow({required this.alarm});
 
-  final BangunAlarm alarm;
+  final AwakeAlarm alarm;
 
   static Color _colorFor(int id) =>
       Bg.tileColors[(id.clamp(0, 999)) % Bg.tileColors.length];

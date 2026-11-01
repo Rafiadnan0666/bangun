@@ -444,8 +444,8 @@ int _normalizeMathProblems(int? raw) {
   return 3;
 }
 
-class BangunAlarm {
-  BangunAlarm({
+class AwakeAlarm {
+  AwakeAlarm({
     required this.id,
     required this.label,
     required this.hour,
@@ -551,7 +551,7 @@ class BangunAlarm {
     'createdAt': createdAt.millisecondsSinceEpoch,
   };
 
-  factory BangunAlarm.fromJson(Map<String, dynamic> json) {
+  factory AwakeAlarm.fromJson(Map<String, dynamic> json) {
     T named<T extends Enum>(List<T> values, String? name, T fallback) =>
         values.firstWhereOrNull((v) => v.name == name) ?? fallback;
     final rawTargets = ((json['scanTargets'] as List?) ?? const [])
@@ -565,7 +565,7 @@ class BangunAlarm {
               rawTargets.first == 'cup'
         ? kDefaultScanTargets
         : rawTargets;
-    return BangunAlarm(
+    return AwakeAlarm(
       id: (json['id'] as num).toInt(),
       label: json['label'] as String? ?? 'Alarm',
       hour: (json['hour'] as num).toInt(),
@@ -610,7 +610,7 @@ class BangunAlarm {
     );
   }
 
-  BangunAlarm copyWith({
+  AwakeAlarm copyWith({
     String? label,
     int? hour,
     int? minute,
@@ -627,7 +627,7 @@ class BangunAlarm {
     String? spotifyUrl,
     double? volume,
   }) {
-    return BangunAlarm(
+    return AwakeAlarm(
       id: id,
       label: label ?? this.label,
       hour: hour ?? this.hour,
@@ -649,8 +649,8 @@ class BangunAlarm {
   }
 
   /// Same alarm with a fresh unique id (used when a duplicate collides).
-  BangunAlarm copyWithId(int newId) {
-    return BangunAlarm(
+  AwakeAlarm copyWithId(int newId) {
+    return AwakeAlarm(
       id: newId,
       label: label,
       hour: hour,

@@ -23,7 +23,7 @@ import '../data/tone_preview.dart';
 class EditorScreen extends StatefulWidget {
   const EditorScreen({super.key, this.existing});
 
-  final BangunAlarm? existing;
+  final AwakeAlarm? existing;
 
   @override
   State<EditorScreen> createState() => _EditorScreenState();
@@ -235,7 +235,7 @@ class _EditorScreenState extends State<EditorScreen> {
     final mode = _repeatMode == RepeatMode.weekly && _days.isEmpty
         ? RepeatMode.once
         : _repeatMode;
-    final alarm = BangunAlarm(
+    final alarm = AwakeAlarm(
       id:
           widget.existing?.id ??
           DateTime.now().millisecondsSinceEpoch % 2147483000,
@@ -304,7 +304,7 @@ class _EditorScreenState extends State<EditorScreen> {
       return;
     }
     if (_toneKind == ToneKind.spotify && !await _promptSpotifyAccess()) return;
-    final alarm = BangunAlarm(
+    final alarm = AwakeAlarm(
       id: widget.existing?.id ?? 0,
       label: _labelCtrl.text.trim().isEmpty
           ? 'Preview'

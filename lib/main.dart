@@ -22,7 +22,7 @@ Future<void> main() async {
   runApp(
     ChangeNotifierProvider(
       create: (_) => AlarmRepository(),
-      child: const BangunApp(),
+      child: const AwakeApp(),
     ),
   );
 }
@@ -32,14 +32,14 @@ Future<void> main() async {
 /// intent relaunch) replay into our listener and get routed to [RingScreen].
 /// Host-side losses (boot-window refusals, stale-at-boot drops) surface as
 /// [AlarmDropped]/[AlarmMoved] events  cleared or re-armed here.
-class BangunApp extends StatefulWidget {
-  const BangunApp({super.key});
+class AwakeApp extends StatefulWidget {
+  const AwakeApp({super.key});
 
   @override
-  State<BangunApp> createState() => _BangunAppState();
+  State<AwakeApp> createState() => _AwakeAppState();
 }
 
-class _BangunAppState extends State<BangunApp> with WidgetsBindingObserver {
+class _AwakeAppState extends State<AwakeApp> with WidgetsBindingObserver {
   final GlobalKey<NavigatorState> _navKey = GlobalKey<NavigatorState>();
   final _RingRouteTracker _ringTracker = _RingRouteTracker();
 
