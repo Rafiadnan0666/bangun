@@ -297,7 +297,7 @@ class AlarmRepository extends ChangeNotifier {
       // Fall back to the built-in tone instead of failing to schedule at all.
       ToneKind.file =>
         ToneFiles.exists(a.filePath) ? a.filePath! : a.tone.assetPath,
-      // Spotify alarms must never blast the siren: Bangun opens Spotify and
+      // Spotify alarms must never blast the siren: Awake opens Spotify and
       // presses play, while a gentle twin chime keeps the ring alive until
       // the gate is cleared (or if Spotify is unavailable).
       ToneKind.spotify => BuiltInTone.twinChime.assetPath,

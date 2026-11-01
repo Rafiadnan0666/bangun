@@ -2,7 +2,7 @@
 ///
 /// Built-in tones and picked files play a five-second slice straight in the
 /// app at the exact volume floor the ring engine enforces. Spotify links do
-/// not play inside Bangun (Spotify owns that audio): the preview runs the
+/// not play inside Awake (Spotify owns that audio): the preview runs the
 /// same start sequence as ring time — open the item and press play via the
 /// media-session bridge — and reports the outcome so the editor can show an
 /// honest message instead of masking it with a siren demo.

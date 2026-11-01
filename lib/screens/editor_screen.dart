@@ -176,7 +176,7 @@ class _EditorScreenState extends State<EditorScreen> {
     return true;
   }
 
-  /// Asks for the one Android permission that lets Bangun press play inside
+  /// Asks for the one Android permission that lets Awake press play inside
   /// Spotify. Returns true only when access is already granted, so callers
   /// simply stop when the user goes to Settings to flip it.
   Future<bool> _promptSpotifyAccess() async {
@@ -188,11 +188,11 @@ class _EditorScreenState extends State<EditorScreen> {
         backgroundColor: Bg.card,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(26)),
         title: const Text(
-          'Let Bangun start Spotify',
+          'Let Awake start Spotify',
           style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18),
         ),
         content: const Text(
-          'Android only lets Bangun press play inside Spotify when '
+          'Android only lets Awake press play inside Spotify when '
           'notification access is on. It is a one-time switch, used only for '
           'your alarm link.\n\nWithout it Spotify opens paused, so you only '
           'hear the backup chime.',
@@ -331,7 +331,7 @@ class _EditorScreenState extends State<EditorScreen> {
     final message = switch (result) {
       SpotifyStart.playing => 'Spotify is playing your link now.',
       SpotifyStart.opened =>
-        'Spotify opened, but it needs notification access before Bangun '
+        'Spotify opened, but it needs notification access before Awake '
             'can press play by itself. Enable it below.',
       SpotifyStart.unavailable =>
         'Spotify is not installed on this device — no link can play here.',
@@ -1370,7 +1370,7 @@ class _SoundCard extends StatelessWidget {
                         const _SpotifyAccessCard(),
                         const SizedBox(height: 8),
                         Text(
-                          'At ring time Bangun opens your link and presses '
+                          'At ring time Awake opens your link and presses '
                           'play in Spotify. The twin-chime backup rings '
                           'underneath until the gate is cleared - no siren.',
                           style: TextStyle(
@@ -1653,7 +1653,7 @@ class _SoundChip extends StatelessWidget {
   }
 }
 
-/// One-time setup row for Spotify mode: without notification access Bangun
+/// One-time setup row for Spotify mode: without notification access Awake
 /// cannot press play inside Spotify, and the link would open paused. The card
 /// re-checks whenever the app resumes from the settings screen.
 class _SpotifyAccessCard extends StatefulWidget {
@@ -1708,7 +1708,7 @@ class _SpotifyAccessCardState extends State<_SpotifyAccessCard>
             const SizedBox(width: 6),
             Expanded(
               child: Text(
-                'Auto-play armed — Bangun presses play in Spotify for you at '
+                'Auto-play armed — Awake presses play in Spotify for you at '
                 'ring time.',
                 style: TextStyle(
                   fontSize: 10.5,
@@ -1743,7 +1743,7 @@ class _SpotifyAccessCardState extends State<_SpotifyAccessCard>
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  'Allow notification access once, and Bangun will press play '
+                  'Allow notification access once, and Awake will press play '
                   'inside Spotify by itself — no siren, no manual tap.',
                   style: TextStyle(
                     fontSize: 10.5,

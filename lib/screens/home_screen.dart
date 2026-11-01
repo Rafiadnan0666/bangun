@@ -170,7 +170,7 @@ class _Header extends StatelessWidget {
                 runSpacing: 4,
                 children: [
                   const Text(
-                    'Awake.',
+                    'Bangun.',
                     style: TextStyle(
                       fontSize: 27,
                       fontWeight: FontWeight.w900,
@@ -513,7 +513,7 @@ class _ReliabilityCardState extends State<_ReliabilityCard>
             if (hasSpotify && !_spotifyAccess) ...[
               const SizedBox(height: 6),
               _line(
-                'Your Spotify alarm needs notification access before Bangun '
+                'Your Spotify alarm needs notification access before Awake '
                     'can press play by itself. Without it Spotify opens paused '
                     'and you only hear the backup chime.',
                 'Allow Spotify auto-play',
@@ -528,7 +528,7 @@ class _ReliabilityCardState extends State<_ReliabilityCard>
               const SizedBox(height: 6),
               _line(
                 'The custom tone for "${missingTone.label}" is missing. '
-                    'Bangun will ring with ${missingTone.tone.title} until you '
+                    'Awake will ring with ${missingTone.tone.title} until you '
                     'pick the file again.',
                 'Review alarm',
                 () async {

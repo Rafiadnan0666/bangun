@@ -1,4 +1,4 @@
-/// Bangun domain models: alarms with schedule rules, challenge config,
+/// Awake domain models: alarms with schedule rules, challenge config,
 /// ringtone sources, and wake statistics.
 library;
 
@@ -411,7 +411,7 @@ bool isSpotifyLink(String url) {
   if (trimmed.isEmpty) return false;
   final lower = trimmed.toLowerCase();
   if (lower.startsWith('spotify:')) {
-    // Accept only the four item kinds Bangun can open. This rejects garbage
+    // Accept only the four item kinds Awake can open. This rejects garbage
     // native URIs such as `spotify:not-a-real-thing` before ring time.
     return RegExp(
       r'^spotify:(playlist|track|artist|album):[a-z0-9]{10,}(:play)?$',

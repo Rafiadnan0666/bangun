@@ -317,7 +317,7 @@ class _LockSheet extends StatelessWidget {
           top: false,
           child: Text(
             '⚠️ Alarm details are still loading. The ring keeps sounding '
-            'until the gate is available. Reopen Bangun if this message '
+            'until the gate is available. Reopen Awake if this message '
             'stays on screen.',
             style: TextStyle(color: Bg.ink, fontSize: 13),
           ),
@@ -357,7 +357,7 @@ class _LockSheet extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'Bangun lockdown',
+                            'Awake lockdown',
                             style: TextStyle(
                               fontWeight: FontWeight.w900,
                               fontSize: 15.5,
@@ -427,7 +427,7 @@ class _LockSheet extends StatelessWidget {
                         children: [
                           const Expanded(
                             child: Text(
-                              'Allow notification access so Bangun can press play '
+                              'Allow notification access so Awake can press play '
                               'in Spotify by itself.',
                               style: TextStyle(
                                 fontSize: 10.5,

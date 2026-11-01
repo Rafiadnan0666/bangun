@@ -1,7 +1,7 @@
 /// Single handoff routine shared by the ring screen and the editor preview.
 ///
 /// Launching a Spotify deep link only gets you *into* Spotify: depending on
-/// the app version the item can sit paused until someone taps play. Bangun
+/// the app version the item can sit paused until someone taps play. Awake
 /// closes that gap with the Android media-session bridge
 /// ([MediaControl.spotifyPlay]): once Spotify has published its session it
 /// accepts a `play()` command from a notification listener, so the alarm can

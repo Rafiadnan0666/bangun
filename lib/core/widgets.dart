@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'palette.dart';
 
-/// White rounded card, standard Bangun surface.
+/// White rounded card, standard Awake surface.
 class BgCard extends StatelessWidget {
   const BgCard({
     super.key,

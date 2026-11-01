@@ -2,7 +2,7 @@
 ///
 /// The interesting call is [spotifyPlay]: Android gives MediaController
 /// access (i.e. the ability to press play in Spotify) only to apps that own a
-/// notification listener. Bangun registers one, the user enables "notification
+/// notification listener. Awake registers one, the user enables "notification
 /// access" once, and from then on the ring screen can start the configured
 /// playlist/song itself instead of hoping Spotify honours a deep-link flag.
 library;
@@ -37,7 +37,7 @@ final class MediaControl {
     }
   }
 
-  /// True when the user granted "notification access" to Bangun, which is what
+  /// True when the user granted "notification access" to Awake, which is what
   /// unlocks Spotify's [MediaController].
   static Future<bool> hasNotificationAccess() async {
     try {

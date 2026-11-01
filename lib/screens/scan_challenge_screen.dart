@@ -201,7 +201,7 @@ class _ScanChallengeScreenState extends State<ScanChallengeScreen>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    // Never leave the torch burning while Bangun is in the background.
+    // Never leave the torch burning while Awake is in the background.
     if (state == AppLifecycleState.paused && _torchOn) {
       _torchOn = false;
       unawaited(
