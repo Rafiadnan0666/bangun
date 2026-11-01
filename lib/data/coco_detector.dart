@@ -36,6 +36,8 @@ class Detection {
   String toString() => '$label ${(score * 100).round()}%';
 }
 
+enum ModelChoice { ssdMobileNet, yolo11n90 }
+
 /// COCO-SSD detector singleton. Call [load] once at startup so the model is
 /// warm long before any alarm rings.
 class CocoDetector {
@@ -43,9 +45,13 @@ class CocoDetector {
 
   static final CocoDetector I = CocoDetector._();
 
-  static const modelAsset =
-      'assets/models/coco_ssd_mobilenet_v1_1.0_quant.tflite';
+  static ModelChoice selected = ModelChoice.ssdMobileNet;
+
+  static const String modelAssetSsd = 'assets/models/coco_ssd_mobilenet_v1_1.0_quant.tflite';
+  static const String modelAssetYolo = 'assets/models/yolo11n_awake_90class_int8.tflite';
   static const labelsAsset = 'assets/models/labels.txt';
+
+  String get _currentAsset => selected == ModelChoice.yolo11n90 ? modelAssetYolo : modelAssetSsd;
 
   /// Only draw and accept clear detections. The class-label fix removes the
   /// biggest source of nonsense; this cutoff removes the remaining weak boxes
@@ -159,7 +165,7 @@ class CocoDetector {
 
       final options = InterpreterOptions()..threads = 4;
       final interpreter = await Interpreter.fromAsset(
-        modelAsset,
+        _currentAsset,
         options: options,
       );
 

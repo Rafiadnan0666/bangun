@@ -1,4 +1,4 @@
-# Bangun (Awake) — Non-Dismissable Alarm with On-Device ML Gate
+# Awake (Bangun) - Non-Dismissable Alarm with On-Device ML Gate
 
 **Version:** 1.0.2+3  
 **Built:** Flutter 3.47.6 / Dart 3.13.5  
@@ -10,7 +10,7 @@
 
 A non-dismissable Android alarm clock that stops ONLY when you complete a challenge: solve math problems or scan a real object with your camera. All detection runs on-device using TensorFlow Lite (`assets/models/coco_ssd_mobilenet_v1_1.0_quant.tflite`). Zero data leaves the phone.
 
-**Package:** `com.example.bangun`  
+**Package:** `com.example.awake`  
 **App ID:** `awake`  
 **Location:** `C:\Users\BRAVO\Downlo\hh\awake\bangun\`
 

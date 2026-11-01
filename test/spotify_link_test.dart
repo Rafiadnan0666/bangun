@@ -1,4 +1,4 @@
-import 'package:bangun/data/models.dart';
+import 'package:awake/data/models.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

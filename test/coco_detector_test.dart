@@ -1,7 +1,7 @@
 import 'dart:io';
 import 'dart:ui';
 
-import 'package:bangun/data/coco_detector.dart';
+import 'package:awake/data/coco_detector.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
