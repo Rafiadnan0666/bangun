@@ -8,7 +8,9 @@ Build: `flutter build apk --release` (83.8 MB), commit `d767c8d`
 
 | Item | Value |
 |------|-------|
-| Emulator | `Medium_Phone_API_37.0` (Android API 37) |
+| Emulator 1 | `Medium_Phone_API_37.0` (Android API 37, Google Play x86_64) |
+| Emulator 2 | `Pixel_API_36` (Android API 36, Google Play x86_64) |
+| Physical device | Samsung phone (user-observed) |
 | Screen | 1080 x 2400, density 420 dpi |
 | Host | Windows 11, AMD Ryzen 5 7535HS, CPU-only |
 | Install | `adb install -r app-release.apk` |
@@ -30,17 +32,24 @@ a conservative upper bound of the audible delay (UI work runs before audio).
 
 | Run | Device | Alarm set | Ring screen observed | Delay |
 |-----|--------|-----------|----------------------|-------|
-| 1 | Emulator API 37 | 17:26 | 17:26:00.609 | 0.61 s |
-| 2 | Emulator API 37 | 17:54 | 17:54:00.260 | 0.26 s |
-| 3 | Emulator API 37 | 17:56 | 17:56:00.319 | 0.32 s |
-| 4 | Physical phone | 10:00 | 10:00:00.4 - 10:00:01.0 | 0.4 - 1.0 s |
+| 1 | Emulator API 37 (Medium Phone) | 17:26 | 17:26:00.609 | 0.61 s |
+| 2 | Emulator API 37 (Medium Phone) | 17:54 | 17:54:00.260 | 0.26 s |
+| 3 | Emulator API 37 (Medium Phone) | 17:56 | 17:56:00.319 | 0.32 s |
+| 4 | Emulator API 36 (Pixel) | 18:33 | 18:33:00.418 | 0.42 s |
+| 5 | Emulator API 36 (Pixel) | 18:35 | 18:35:00.576 | 0.58 s |
+| 6 | Physical Samsung phone | 10:00 | 10:00:00.4 - 10:00:01.0 | 0.4 - 1.0 s |
 
-Emulator mean delay: **0.40 s** (min 0.26 s, max 0.61 s)
-Physical phone observed: **0.4 - 1.0 s**
+Per-device summary:
 
-All three runs fired without user interaction. The alarm is scheduled once with
-Android `AlarmManager` (`RTC_WAKEUP`) and fires automatically at the requested
-minute.
+| Device | Runs | Mean delay | Range |
+|--------|------|-----------|-------|
+| Emulator API 37 | 3 | 0.40 s | 0.26 - 0.61 s |
+| Emulator API 36 | 2 | 0.50 s | 0.42 - 0.58 s |
+| Samsung physical phone | user-observed | 0.4 - 1.0 s | 0.4 - 1.0 s |
+
+All five emulator runs fired without user interaction. The alarm is scheduled
+once with Android `AlarmManager` (`RTC_WAKEUP`) and fires automatically at the
+requested minute.
 
 ## Interpretation
 
@@ -54,8 +63,10 @@ minute.
 
 ## Notes
 
-- Only one Android AVD was available on this machine
-  (`Medium_Phone_API_37.0`). Windows, Chrome and Edge devices do not run the
-  Android alarm plugin, so they were not used.
-- Reproduce: `flutter emulators --launch Medium_Phone_API_37.0`,
+- Two Android emulator variants were tested: API 37 (Medium Phone) and API 36
+  (Pixel). Windows, Chrome and Edge devices do not run the Android alarm
+  plugin, so they were not used.
+- Samsung phone result is user-observed in the 0.4-1.0 s range.
+- Reproduce: `flutter emulators --launch Medium_Phone_API_37.0` or
+  `flutter emulators --launch Pixel_API_36`,
   `adb install -r build/app/outputs/flutter-apk/app-release.apk`.
