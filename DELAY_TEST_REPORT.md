@@ -28,15 +28,15 @@ a conservative upper bound of the audible delay (UI work runs before audio).
 
 ## Results
 
-| Run | Alarm set | Ring screen observed | Delay |
-|-----|-----------|----------------------|-------|
-| 1 | 17:26 | 17:26:00.609 | 0.61 s |
-| 2 | 17:54 | 17:54:00.260 | 0.26 s |
-| 3 | 17:56 | 17:56:00.319 | 0.32 s |
+| Run | Device | Alarm set | Ring screen observed | Delay |
+|-----|--------|-----------|----------------------|-------|
+| 1 | Emulator API 37 | 17:26 | 17:26:00.609 | 0.61 s |
+| 2 | Emulator API 37 | 17:54 | 17:54:00.260 | 0.26 s |
+| 3 | Emulator API 37 | 17:56 | 17:56:00.319 | 0.32 s |
+| 4 | Physical phone | 10:00 | 10:00:00.4 - 10:00:01.0 | 0.4 - 1.0 s |
 
-Mean delay: **0.40 s**
-Min: **0.26 s**
-Max: **0.61 s**
+Emulator mean delay: **0.40 s** (min 0.26 s, max 0.61 s)
+Physical phone observed: **0.4 - 1.0 s**
 
 All three runs fired without user interaction. The alarm is scheduled once with
 Android `AlarmManager` (`RTC_WAKEUP`) and fires automatically at the requested
