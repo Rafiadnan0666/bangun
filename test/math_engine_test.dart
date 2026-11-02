@@ -53,7 +53,7 @@ void main() {
     });
   });
 
-  group('BangunAlarm.nextOccurrence', () {
+  group('AwakeAlarm.nextOccurrence', () {
     final from = DateTime(2026, 10, 20, 6, 0); // Tuesday
 
     test('once: later today stays today', () {
@@ -95,7 +95,7 @@ void main() {
     });
 
     test('json round-trip keeps all fields', () {
-      final a = BangunAlarm(
+      final a = AwakeAlarm(
         id: 42,
         label: 'Morning run',
         hour: 6,
@@ -112,7 +112,7 @@ void main() {
         volume: 0.9,
         createdAt: DateTime(2026, 1, 2),
       );
-      final b = BangunAlarm.fromJson(a.toJson());
+      final b = AwakeAlarm.fromJson(a.toJson());
       expect(b.id, 42);
       expect(b.label, 'Morning run');
       expect(b.days, [1, 4]);
@@ -137,13 +137,13 @@ void main() {
   });
 }
 
-BangunAlarm _alarm({
+AwakeAlarm _alarm({
   required int hour,
   required int minute,
   required RepeatMode mode,
   List<int>? days,
 }) {
-  return BangunAlarm(
+  return AwakeAlarm(
     id: 7,
     label: 'test',
     hour: hour,

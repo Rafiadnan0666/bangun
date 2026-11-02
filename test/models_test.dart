@@ -2,7 +2,7 @@ import 'package:awake/data/models.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  group('BangunAlarm problem count', () {
+  group('AwakeAlarm problem count', () {
     Map<String, dynamic> json(int problems) => {
       'id': 1,
       'label': 'Test',
@@ -12,29 +12,29 @@ void main() {
     };
 
     test('defaults to three problems', () {
-      expect(BangunAlarm.fromJson(json(3)).mathProblems, 3);
+      expect(AwakeAlarm.fromJson(json(3)).mathProblems, 3);
     });
 
     test('normalizes old four-problem records to three', () {
-      expect(BangunAlarm.fromJson(json(4)).mathProblems, 3);
+      expect(AwakeAlarm.fromJson(json(4)).mathProblems, 3);
     });
 
     test('keeps and normalizes the offered counts', () {
-      expect(BangunAlarm.fromJson(json(5)).mathProblems, 5);
-      expect(BangunAlarm.fromJson(json(6)).mathProblems, 5);
-      expect(BangunAlarm.fromJson(json(7)).mathProblems, 7);
-      expect(BangunAlarm.fromJson(json(99)).mathProblems, 7);
-      expect(BangunAlarm.fromJson(json(0)).mathProblems, 3);
+      expect(AwakeAlarm.fromJson(json(5)).mathProblems, 5);
+      expect(AwakeAlarm.fromJson(json(6)).mathProblems, 5);
+      expect(AwakeAlarm.fromJson(json(7)).mathProblems, 7);
+      expect(AwakeAlarm.fromJson(json(99)).mathProblems, 7);
+      expect(AwakeAlarm.fromJson(json(0)).mathProblems, 3);
     });
   });
 
   group('missedOneShot', () {
-    BangunAlarm alarm({
+    AwakeAlarm alarm({
       required DateTime createdAt,
       RepeatMode repeatMode = RepeatMode.once,
       int hour = 7,
       bool enabled = true,
-    }) => BangunAlarm(
+    }) => AwakeAlarm(
       id: 1,
       label: 'Test',
       hour: hour,
@@ -99,24 +99,24 @@ void main() {
     };
 
     test('missing targets use the broad common default', () {
-      final target = BangunAlarm.fromJson(json()).scanTargets;
+      final target = AwakeAlarm.fromJson(json()).scanTargets;
       expect(target, kDefaultScanTargets);
     });
 
     test('old cup-only records expand once to the default pool', () {
-      final target = BangunAlarm.fromJson(json(targets: ['cup'])).scanTargets;
+      final target = AwakeAlarm.fromJson(json(targets: ['cup'])).scanTargets;
       expect(target, kDefaultScanTargets);
     });
 
     test('new cup-only records keep the deliberate choice', () {
-      final target = BangunAlarm.fromJson(
+      final target = AwakeAlarm.fromJson(
         json(targets: ['cup'], schema: kScanTargetsSchema),
       ).scanTargets;
       expect(target, ['cup']);
     });
 
     test('records write the schema version', () {
-      final record = BangunAlarm.fromJson(
+      final record = AwakeAlarm.fromJson(
         json(targets: ['book'], schema: kScanTargetsSchema),
       );
       expect(record.toJson()['scanTargetsSchema'], kScanTargetsSchema);
@@ -124,7 +124,7 @@ void main() {
   });
 
   group('scan challenge label', () {
-    BangunAlarm alarm(List<String> targets) => BangunAlarm(
+    AwakeAlarm alarm(List<String> targets) => AwakeAlarm(
       id: 1,
       label: 'Test',
       hour: 7,

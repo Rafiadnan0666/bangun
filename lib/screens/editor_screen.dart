@@ -113,6 +113,82 @@ class _EditorScreenState extends State<EditorScreen> {
     }
   }
 
+  Future<void> _typeTime() async {
+    final hourCtrl = TextEditingController(text: two(_hour));
+    final minuteCtrl = TextEditingController(text: two(_minute));
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: Bg.card,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(26)),
+        title: const Text(
+          'Type the time',
+          style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18),
+        ),
+        content: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            SizedBox(
+              width: 64,
+              child: TextField(
+                controller: hourCtrl,
+                keyboardType: TextInputType.number,
+                maxLength: 2,
+                textAlign: TextAlign.center,
+                decoration: const InputDecoration(
+                  labelText: 'HH',
+                  counterText: '',
+                ),
+              ),
+            ),
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 10),
+              child: Text(':', style: TextStyle(fontSize: 24)),
+            ),
+            SizedBox(
+              width: 64,
+              child: TextField(
+                controller: minuteCtrl,
+                keyboardType: TextInputType.number,
+                maxLength: 2,
+                textAlign: TextAlign.center,
+                decoration: const InputDecoration(
+                  labelText: 'MM',
+                  counterText: '',
+                ),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel', style: TextStyle(color: Bg.sub)),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: Bg.ctaA),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Set'),
+          ),
+        ],
+      ),
+    );
+    if (ok == true) {
+      final h = int.tryParse(hourCtrl.text.trim());
+      final m = int.tryParse(minuteCtrl.text.trim());
+      if (h != null && m != null && h >= 0 && h < 24 && m >= 0 && m < 60) {
+        setState(() {
+          _hour = h;
+          _minute = m;
+        });
+      } else {
+        _showMessage('Use hour 0-23 and minute 0-59.');
+      }
+    }
+    hourCtrl.dispose();
+    minuteCtrl.dispose();
+  }
+
   Future<void> _pickFile() async {
     try {
       final result = await FilePicker.platform.pickFiles(
@@ -214,7 +290,7 @@ class _EditorScreenState extends State<EditorScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Not now', style: TextStyle(color: Bg.sub)),
+            child: const Text('Continue without', style: TextStyle(color: Bg.sub)),
           ),
           FilledButton(
             style: FilledButton.styleFrom(backgroundColor: Bg.ctaA),
@@ -227,7 +303,7 @@ class _EditorScreenState extends State<EditorScreen> {
     if (openSettings == true) {
       await MediaControl.openNotificationAccessSettings();
     }
-    return false;
+    return true;
   }
 
   Future<void> _selectSpotify() async {
@@ -414,6 +490,7 @@ class _EditorScreenState extends State<EditorScreen> {
                     onStepHour: _stepHour,
                     onStepMinute: _stepMinute,
                     onPickTime: _pickTime,
+                    onTypeTime: _typeTime,
                   ),
                   const SizedBox(height: 16),
                   _RepeatCard(
@@ -563,6 +640,7 @@ class _TimeCard extends StatelessWidget {
     required this.onStepHour,
     required this.onStepMinute,
     required this.onPickTime,
+    required this.onTypeTime,
   });
 
   final int hour;
@@ -570,6 +648,7 @@ class _TimeCard extends StatelessWidget {
   final ValueChanged<int> onStepHour;
   final ValueChanged<int> onStepMinute;
   final VoidCallback onPickTime;
+  final VoidCallback onTypeTime;
 
   @override
   Widget build(BuildContext context) {
@@ -622,6 +701,23 @@ class _TimeCard extends StatelessWidget {
                   onLess: () => onStepMinute(-1),
                   onMore: () => onStepMinute(1),
                 ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              TextButton.icon(
+                onPressed: onPickTime,
+                icon: const Icon(Icons.schedule, size: 16),
+                label: const Text('Wheel picker'),
+              ),
+              const SizedBox(width: 8),
+              TextButton.icon(
+                onPressed: onTypeTime,
+                icon: const Icon(Icons.keyboard, size: 16),
+                label: const Text('Type'),
               ),
             ],
           ),
