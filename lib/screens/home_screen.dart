@@ -7,6 +7,7 @@ import '../core/format.dart';
 import '../core/palette.dart';
 import '../core/widgets.dart';
 import '../data/alarm_repository.dart';
+import '../data/coco_detector.dart';
 import '../data/media_control.dart';
 import '../data/models.dart';
 import '../data/tone_files.dart';
@@ -169,13 +170,7 @@ class _Header extends StatelessWidget {
                 spacing: 10,
                 runSpacing: 4,
                 children: [
-                  DropdownButton<ModelChoice>(
-                value: CocoDetector.selected,
-                underline: Container(height:1,color:Colors.grey),
-                items: ModelChoice.values.map((m) => DropdownMenuItem(value:m, child: Text(m == ModelChoice.ssdMobileNet ? 'SSD MobileNet' : 'YOLO11n 90'))).toList(),
-                onChanged: (m) { if (m != null) CocoDetector.selected = m; },
-              ),
-              const Text(
+                  const Text(
                     'Awake.',
                     style: TextStyle(
                       fontSize: 27,
@@ -205,17 +200,45 @@ class _Header extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 2),
-              DropdownButton<ModelChoice>(
-                value: CocoDetector.selected,
-                underline: Container(height:1,color:Colors.grey),
-                items: ModelChoice.values.map((m) => DropdownMenuItem(value:m, child: Text(m == ModelChoice.ssdMobileNet ? 'SSD MobileNet' : 'YOLO11n 90'))).toList(),
-                onChanged: (m) { if (m != null) CocoDetector.selected = m; },
-              ),
               const Text(
                 'wake smart · stop by scan or math',
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(fontSize: 12, color: Bg.sub, height: 1.2),
+              ),
+              const SizedBox(height: 4),
+              Row(
+                children: [
+                  const Text(
+                    'Model:',
+                    style: TextStyle(fontSize: 11, color: Bg.sub),
+                  ),
+                  const SizedBox(width: 6),
+                  DropdownButton<ModelChoice>(
+                    value: CocoDetector.selected,
+                    isDense: true,
+                    underline: const SizedBox.shrink(),
+                    style: const TextStyle(fontSize: 12, color: Bg.ink),
+                    items: ModelChoice.values
+                        .map(
+                          (m) => DropdownMenuItem(
+                            value: m,
+                            child: Text(
+                              m == ModelChoice.ssdMobileNet
+                                  ? 'SSD MobileNet'
+                                  : 'YOLO11n 90',
+                            ),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: (m) {
+                      if (m != null) {
+                        CocoDetector.selected = m;
+                        (context as Element).markNeedsBuild();
+                      }
+                    },
+                  ),
+                ],
               ),
             ],
           ),
@@ -303,12 +326,6 @@ class _HeroNextAlarm extends StatelessWidget {
                 ),
               ),
               const Spacer(),
-              DropdownButton<ModelChoice>(
-                value: CocoDetector.selected,
-                underline: Container(height:1,color:Colors.grey),
-                items: ModelChoice.values.map((m) => DropdownMenuItem(value:m, child: Text(m == ModelChoice.ssdMobileNet ? 'SSD MobileNet' : 'YOLO11n 90'))).toList(),
-                onChanged: (m) { if (m != null) CocoDetector.selected = m; },
-              ),
               const Text('☀️', style: TextStyle(fontSize: 26)),
             ],
           ),
@@ -933,13 +950,7 @@ class _StatsSheet extends StatelessWidget {
             children: [
               Row(
                 children: [
-                  DropdownButton<ModelChoice>(
-                value: CocoDetector.selected,
-                underline: Container(height:1,color:Colors.grey),
-                items: ModelChoice.values.map((m) => DropdownMenuItem(value:m, child: Text(m == ModelChoice.ssdMobileNet ? 'SSD MobileNet' : 'YOLO11n 90'))).toList(),
-                onChanged: (m) { if (m != null) CocoDetector.selected = m; },
-              ),
-              const Text(
+                  const Text(
                     '🔥 Wake streaks',
                     style: TextStyle(
                       fontWeight: FontWeight.w900,
@@ -974,12 +985,6 @@ class _StatsSheet extends StatelessWidget {
                 value: '${stats.mathWins} · Scan wins: ${stats.scanWins}',
               ),
               const SizedBox(height: 8),
-              DropdownButton<ModelChoice>(
-                value: CocoDetector.selected,
-                underline: Container(height:1,color:Colors.grey),
-                items: ModelChoice.values.map((m) => DropdownMenuItem(value:m, child: Text(m == ModelChoice.ssdMobileNet ? 'SSD MobileNet' : 'YOLO11n 90'))).toList(),
-                onChanged: (m) { if (m != null) CocoDetector.selected = m; },
-              ),
               const Text(
                 'A win is counted each time you finish a challenge to stop a ring. '
                 'Streaks span all alarms.',

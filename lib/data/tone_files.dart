@@ -54,6 +54,27 @@ final class ToneFiles {
     }
   }
 
+  /// Writes in-memory bytes (returned by the Android SAF picker) into app
+  /// documents and returns the durable path.
+  static Future<String> storeBytes(List<int> bytes, String? extension) async {
+    final docs = await getApplicationDocumentsDirectory();
+    final ext = _safeExtension(extension);
+    final target = File(
+      '${docs.path}/$prefix${DateTime.now().microsecondsSinceEpoch}.$ext',
+    );
+    try {
+      await target.writeAsBytes(bytes, flush: true);
+      return target.path;
+    } on Object {
+      try {
+        if (await target.exists()) await target.delete();
+      } on Object {
+        // Best effort: an orphan sweep on the next boot will catch it.
+      }
+      rethrow;
+    }
+  }
+
   /// Deletes one managed file when no remaining alarm references it. Files
   /// outside the managed `tone_` naming scheme are left alone.
   static Future<void> deleteIfUnreferenced(

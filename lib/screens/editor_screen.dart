@@ -115,25 +115,38 @@ class _EditorScreenState extends State<EditorScreen> {
 
   Future<void> _pickFile() async {
     try {
-      final result = await FilePicker.platform.pickFiles(type: FileType.audio);
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.audio,
+        withData: true,
+      );
       final picked = result?.files.firstOrNull;
       if (picked == null) return;
       final sourcePath = picked.path;
-      if (sourcePath == null) {
+      final bytes = picked.bytes;
+      if (sourcePath == null && bytes == null) {
         _showMessage('That file could not be opened. Try another audio file.');
-        return;
-      }
-      final source = File(sourcePath);
-      final size = await source.length();
-      if (size > ToneFiles.maxBytes) {
-        _showMessage('Pick an audio file smaller than 25 MB.');
         return;
       }
       // Copy into the app's documents directory: system cache copies get
       // evicted and SAF read grants expire, which is exactly how a "custom
       // file" alarm ends up silent (or default-toned) after a while.
       final previous = _filePath;
-      final durablePath = await ToneFiles.store(source, picked.extension);
+      String durablePath;
+      if (sourcePath != null) {
+        final source = File(sourcePath);
+        final size = await source.length();
+        if (size > ToneFiles.maxBytes) {
+          _showMessage('Pick an audio file smaller than 25 MB.');
+          return;
+        }
+        durablePath = await ToneFiles.store(source, picked.extension);
+      } else {
+        if (bytes!.length > ToneFiles.maxBytes) {
+          _showMessage('Pick an audio file smaller than 25 MB.');
+          return;
+        }
+        durablePath = await ToneFiles.storeBytes(bytes, picked.extension);
+      }
       if (!mounted) {
         await ToneFiles.deleteIfUnreferenced(durablePath, const []);
         return;
@@ -606,8 +619,8 @@ class _TimeCard extends StatelessWidget {
                 child: _StepperRow(
                   label: 'Minute',
                   value: two(minute),
-                  onLess: () => onStepMinute(-5),
-                  onMore: () => onStepMinute(5),
+                  onLess: () => onStepMinute(-1),
+                  onMore: () => onStepMinute(1),
                 ),
               ),
             ],
