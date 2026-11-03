@@ -16,6 +16,16 @@ A non-dismissable Android alarm clock that stops ONLY when you complete a challe
 
 ---
 
+## SCREENSHOTS (new version)
+
+![Home screen](screenshots/home.png)
+
+![Edit alarm / sound card](screenshots/editor.png)
+
+![File picker / own file](screenshots/picker.png)
+
+---
+
 ## HOW it works (architecture)
 
 ```
