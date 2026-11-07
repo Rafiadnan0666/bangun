@@ -1,3 +1,5 @@
+// Not documented in the paper; feature retained in app but out of scope for the J-ICOM submission.
+
 /// Single handoff routine shared by the ring screen and the editor preview.
 ///
 /// Launching a Spotify deep link only gets you *into* Spotify: depending on

@@ -1,6 +1,6 @@
 # awake - Non-Dismissable Alarm with On-Device ML Gate
 
-⚠️ **Canonical evidence for the paper is tag `v1.1.0-paper`**; commits before 2026-11-07 are a stale snapshot.
+⚠️ **Canonical evidence for the paper is tag `v1.1.1-paper`**; commits before 2026-11-07 are a stale snapshot.
 
 **Version:** 1.1.0+4  
 **Built:** Flutter 3.47.6 / Dart 3.13.5  
@@ -24,7 +24,7 @@ The YOLO model is limited to microwave, oven, toaster, hair drier, and refrigera
 **Installable release:** `dist/app-release-awake.apk`  
 **Tests:** 78 pass  
 **Coverage:** `coverage/lcov.info`  
-**Tag:** `v1.1.0-paper`
+**Tag:** `v1.1.1-paper`
 
 ---
 
@@ -69,17 +69,17 @@ Success --> Alarm.stop()   Stats update, streak++, alarm re-arms
 | `lib/main.dart` | App shell and ring router with replay for cold-start rings |
 | `lib/core/palette.dart` | Design tokens: pale blue canvas, white cards, blue accents |
 | `lib/core/widgets.dart` | Shared cards, pills, status rows, reveal animation |
-| `lib/data/models.dart` | `AwakeAlarm`, `WakeStats`, scan target groups, Spotify validation, COCO targets, `kYoloScanTargets` |
+| `lib/data/models.dart` | `AwakeAlarm`, `WakeStats`, scan target groups, COCO targets, `kYoloScanTargets` |
 | `lib/data/alarm_repository.dart` | Native scheduling, boot recovery, one-shot retirement, repeating re-arm, tone fallback |
 | `lib/data/math_engine.dart` | Non-negative integer problems at three difficulty tiers |
 | `lib/data/coco_detector.dart` | SSD and YOLO loading, preprocessing, postprocessing, NMS, model switching |
 | `lib/data/scan_geometry.dart` | Detector boxes projected onto the camera preview |
 | `lib/data/tone_files.dart` | Durable copies of picked audio files and orphan cleanup |
-| `lib/data/tone_preview.dart` | In-editor preview for built-in, file, and Spotify paths |
-| `lib/data/spotify_launch.dart` | Spotify deep link, retry, and `MEDIA_PLAY_FROM_SEARCH` fallback |
+| `lib/data/tone_preview.dart` | In-editor preview for built-in and file paths |
+
 | `lib/screens/home_screen.dart` | Hero card, reliability card, alarm list, model picker, quick tiles |
 | `lib/screens/editor_screen.dart` | Time, repeat, challenge, target, tone, and volume form |
-| `lib/screens/ring_screen.dart` | Lockdown ring screen with back blocked and Spotify handoff |
+| `lib/screens/ring_screen.dart` | Lockdown ring screen with back blocked |
 | `lib/screens/math_challenge_screen.dart` | Custom keypad, progress chip, difficulty tag |
 | `lib/screens/scan_challenge_screen.dart` | Camera preview, on-demand inference, hold meter, torch, shuffle |
 | `lib/screens/success_screen.dart` | Celebration screen and trial-copy handling |
@@ -167,18 +167,17 @@ python tools\report_device_matrix.py
 
 ---
 
-## Sound and Spotify behavior
+## Sound behavior
 
 - Built-in tones are packaged WAV assets and loop through the native alarm service.
 - A picked audio file is copied into the app documents directory as `tone_<timestamp>.<ext>`. The native service receives the absolute path and loops it. If the file disappears, scheduling falls back to the alarm's built-in tone so the alarm never becomes silent.
-- Spotify alarms use a Spotify deep link plus notification access to press play. This is not a native Spotify account login and it does not search the catalog inside awake. It requires the Spotify app, notification access, and a Premium account for reliable playback.
 
 ---
 
 ## TESTING verification
 
 - `flutter analyze` reports zero issues.
-- `flutter test` runs 78 tests across math, scan targets, geometry, detector postprocessing, alarm models, and Spotify link validation.
+- `flutter test` runs 78 tests across math, scan targets, geometry, detector postprocessing, and alarm models.
 - The Android integration test passes both models on `emulator-5554`.
 - The release APK is installed and launched at multiple resolutions without a crash.
 
@@ -211,7 +210,7 @@ The fixture images are not part of the shipped app. Add them to
 - A broken camera has no in-app escape for scan-only alarms. Use a math alarm or a mixed challenge.
 - Force-stop cancels alarms until the app is opened again. Normal process death, reboot, and lock are handled.
 - Some Xiaomi, Oppo, Vivo, and Huawei builds need autostart and battery optimization changes.
-- Spotify native login and in-app song search are not implemented. The app hands off to Spotify with a link.
+
 - The 10-brand test uses emulated display profiles. Only the Samsung physical-device delay result is user-reported.
 - iOS is not configured.
 - The release APK uses the debug signing key.
@@ -220,9 +219,9 @@ The fixture images are not part of the shipped app. Add them to
 
 ## PACKAGE AND VERSION
 
-- Source version: `1.0.2+3`
+- Source version: `1.1.0+4`
 - Package id: `id.ac.bsi.awake`
-- Tag: `v1.1.0-paper` (canonical state for paper reproducibility)
+- Tag: `v1.1.1-paper` (canonical state for paper reproducibility)
 - App label: `awake`
 - Installable APK: `dist/app-release-awake.apk`
 - Model evaluation: `tools/results/detector_eval.json`
