@@ -207,7 +207,11 @@ class _RingScreenState extends State<RingScreen>
               child: Column(
                 children: [
                   const Spacer(),
-                  const Text('⏰', style: TextStyle(fontSize: 46)),
+                  const Icon(
+                    Icons.alarm_rounded,
+                    size: 46,
+                    color: Colors.white,
+                  ),
                   const SizedBox(height: 8),
                   Text(
                     hhmm(
@@ -315,11 +319,24 @@ class _LockSheet extends StatelessWidget {
         ),
         child: const SafeArea(
           top: false,
-          child: Text(
-            '⚠️ Alarm details are still loading. The ring keeps sounding '
-            'until the gate is available. Reopen Awake if this message '
-            'stays on screen.',
-            style: TextStyle(color: Bg.ink, fontSize: 13),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(
+                Icons.warning_amber_rounded,
+                size: 20,
+                color: Bg.danger,
+              ),
+              SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'Alarm details are still loading. The ring keeps sounding '
+                  'until the gate is available. Reopen awake if this message '
+                  'stays on screen.',
+                  style: TextStyle(color: Bg.ink, fontSize: 13),
+                ),
+              ),
+            ],
           ),
         ),
       );
@@ -350,14 +367,18 @@ class _LockSheet extends StatelessWidget {
               children: [
                 Row(
                   children: [
-                    const Text('🔒', style: TextStyle(fontSize: 17)),
+                    const Icon(
+                      Icons.lock_rounded,
+                      size: 17,
+                      color: Bg.ink,
+                    ),
                     const SizedBox(width: 10),
                     const Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'Awake lockdown',
+                            'awake lockdown',
                             style: TextStyle(
                               fontWeight: FontWeight.w900,
                               fontSize: 15.5,
@@ -371,7 +392,11 @@ class _LockSheet extends StatelessWidget {
                         ],
                       ),
                     ),
-                    const Text('🧠', style: TextStyle(fontSize: 20)),
+                    const Icon(
+                      Icons.psychology_rounded,
+                      size: 21,
+                      color: Bg.ink,
+                    ),
                   ],
                 ),
                 const SizedBox(height: 12),
@@ -384,14 +409,18 @@ class _LockSheet extends StatelessWidget {
                 const SizedBox(height: 10),
                 if (mathGate) ...[
                   CtaPill(
-                    icon: '🧮',
+                    icon: Icons.calculate_rounded,
                     label: 'Solve ${a.mathProblems} problems',
                     onTap: onMath,
                   ),
                   if (scanGate) const SizedBox(height: 10),
                 ],
                 if (scanGate)
-                  InkPill(icon: '📷', label: 'Scan object', onTap: onScan),
+                  InkPill(
+                    icon: Icons.camera_alt_rounded,
+                    label: 'Scan object',
+                    onTap: onScan,
+                  ),
                 if (a.toneKind == ToneKind.spotify) ...[
                   const SizedBox(height: 8),
                   TextButton.icon(
@@ -427,7 +456,7 @@ class _LockSheet extends StatelessWidget {
                         children: [
                           const Expanded(
                             child: Text(
-                              'Allow notification access so Awake can press play '
+                              'Allow notification access so awake can press play '
                               'in Spotify by itself.',
                               style: TextStyle(
                                 fontSize: 10.5,

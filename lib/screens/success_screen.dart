@@ -3,7 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import '../core/format.dart';
+import '../core/icons.dart';
 import '../core/palette.dart';
 import '../data/models.dart';
 
@@ -91,9 +91,24 @@ class _SuccessScreenState extends State<SuccessScreen>
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Text(
-                    widget.isTrial ? '🧪' : '🎉',
-                    style: const TextStyle(fontSize: 66),
+                  Container(
+                    width: 108,
+                    height: 108,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.18),
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: Colors.white.withValues(alpha: 0.45),
+                        width: 2,
+                      ),
+                    ),
+                    child: Icon(
+                      widget.isTrial
+                          ? Icons.science_rounded
+                          : Icons.check_rounded,
+                      size: 58,
+                      color: Colors.white,
+                    ),
                   ),
                   const SizedBox(height: 14),
                   Text(
@@ -151,20 +166,33 @@ class _SuccessScreenState extends State<SuccessScreen>
                   spacing: 10,
                   runSpacing: 6,
                   children: [
-                    Text(
-                      didScan
-                          ? '${targetEmoji(widget.scannedLabel ?? 'cup')} '
-                                '${widget.scannedLabel ?? 'object'}'
-                          : '🧮 math',
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w900,
-                        fontSize: 15,
-                        color: Bg.ink,
-                      ),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          didScan
+                              ? targetIcon(widget.scannedLabel ?? 'cup')
+                              : Icons.calculate_rounded,
+                          size: 17,
+                          color: Bg.ink,
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          didScan
+                              ? (widget.scannedLabel ?? 'object')
+                              : 'math',
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w900,
+                            fontSize: 15,
+                            color: Bg.ink,
+                          ),
+                        ),
+                      ],
                     ),
-                    const Text(
-                      '🌟',
-                      style: TextStyle(fontWeight: FontWeight.w900),
+                    const Icon(
+                      Icons.auto_awesome_rounded,
+                      size: 17,
+                      color: Bg.ctaA,
                     ),
                     Text(
                       widget.isTrial

@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import '../core/build_info.dart';
 import '../core/format.dart';
+import '../core/icons.dart';
 import '../core/palette.dart';
 import '../core/widgets.dart';
 import '../data/alarm_repository.dart';
@@ -62,32 +63,62 @@ class _HomeScreenState extends State<HomeScreen> {
           children: [
             const _Header(),
             const SizedBox(height: 18),
-            _HeroNextAlarm(alarm: nextAlarm, nextAt: nextAt),
+            Reveal(
+              child: _HeroNextAlarm(alarm: nextAlarm, nextAt: nextAt),
+            ),
             const SizedBox(height: 14),
-            _StatusCard(alarm: nextAlarm, nextAt: nextAt, stats: stats),
-            const _ReliabilityCard(),
+            Reveal(
+              delay: const Duration(milliseconds: 70),
+              child: _StatusCard(
+                alarm: nextAlarm,
+                nextAt: nextAt,
+                stats: stats,
+              ),
+            ),
+            Reveal(
+              delay: const Duration(milliseconds: 120),
+              child: const _ReliabilityCard(),
+            ),
             const SizedBox(height: 16),
-            _QuickTiles(
-              onNewAlarm: _openEditor,
-              onTestScan: () =>
-                  _launchChallenge(context, _trial(ChallengeKind.scan)),
-              onTestMath: () =>
-                  _launchChallenge(context, _trial(ChallengeKind.math)),
-              onStats: _showStatsSheet,
+            Reveal(
+              delay: const Duration(milliseconds: 170),
+              child: _QuickTiles(
+                onNewAlarm: _openEditor,
+                onTestScan: () =>
+                    _launchChallenge(context, _trial(ChallengeKind.scan)),
+                onTestMath: () =>
+                    _launchChallenge(context, _trial(ChallengeKind.math)),
+                onStats: _showStatsSheet,
+              ),
             ),
             const SizedBox(height: 22),
-            _FilterTabs(
-              current: _filter,
-              onChange: (v) => setState(() => _filter = v),
+            Reveal(
+              delay: const Duration(milliseconds: 220),
+              child: _FilterTabs(
+                current: _filter,
+                onChange: (v) => setState(() => _filter = v),
+              ),
             ),
             const SizedBox(height: 12),
             if (_visible.isEmpty)
-              const _EmptyState()
+              const Reveal(
+                delay: Duration(milliseconds: 260),
+                child: _EmptyState(),
+              )
             else ...[
-              for (final a in _visible) _AlarmRow(alarm: a),
+              for (var i = 0; i < _visible.length; i++)
+                Reveal(
+                  delay: Duration(milliseconds: 250 + i * 45),
+                  offset: 12,
+                  child: _AlarmRow(alarm: _visible[i]),
+                ),
             ],
             const SizedBox(height: 20),
-            CtaPill(icon: '＋', label: 'New alarm', onTap: _openEditor),
+            CtaPill(
+              icon: Icons.add_rounded,
+              label: 'New alarm',
+              onTap: _openEditor,
+            ),
             const SizedBox(height: 18),
             const Text(
               'COCO-SSD · MobileNet · fully on-device · alarms you stop by '
@@ -156,7 +187,7 @@ class _Header extends StatelessWidget {
             shape: BoxShape.circle,
           ),
           alignment: Alignment.center,
-          child: const Text('👋', style: TextStyle(fontSize: 22)),
+          child: const Icon(Icons.waving_hand_rounded, size: 22, color: Bg.ink),
         ),
         const SizedBox(width: 12),
         Expanded(
@@ -171,7 +202,7 @@ class _Header extends StatelessWidget {
                 runSpacing: 4,
                 children: [
                   const Text(
-                    'Awake.',
+                    'awake.',
                     style: TextStyle(
                       fontSize: 27,
                       fontWeight: FontWeight.w900,
@@ -189,12 +220,23 @@ class _Header extends StatelessWidget {
                         color: Bg.card,
                         borderRadius: BorderRadius.circular(999),
                       ),
-                      child: Text(
-                        '🔥 $streak',
-                        style: const TextStyle(
-                          fontWeight: FontWeight.w800,
-                          color: Bg.ink,
-                        ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(
+                            Icons.local_fire_department_rounded,
+                            size: 14,
+                            color: Bg.ink,
+                          ),
+                          const SizedBox(width: 3),
+                          Text(
+                            '$streak',
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w800,
+                              color: Bg.ink,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                 ],
@@ -226,14 +268,14 @@ class _Header extends StatelessWidget {
                             child: Text(
                               m == ModelChoice.ssdMobileNet
                                   ? 'SSD MobileNet'
-                                  : 'YOLO11n 90',
+                                  : 'YOLO11n tuned',
                             ),
                           ),
                         )
                         .toList(),
                     onChanged: (m) {
                       if (m != null) {
-                        CocoDetector.selected = m;
+                        CocoDetector.select(m);
                         (context as Element).markNeedsBuild();
                       }
                     },
@@ -277,8 +319,10 @@ class _HeroNextAlarm extends StatelessWidget {
         children: [
           const Row(
             children: [
+              Icon(Icons.upcoming_rounded, size: 14, color: Colors.white70),
+              SizedBox(width: 6),
               Text(
-                '◔ next alarm',
+                'next alarm',
                 style: TextStyle(color: Colors.white70, fontSize: 12.5),
               ),
             ],
@@ -326,7 +370,7 @@ class _HeroNextAlarm extends StatelessWidget {
                 ),
               ),
               const Spacer(),
-              const Text('☀️', style: TextStyle(fontSize: 26)),
+              const Icon(Icons.wb_sunny_rounded, size: 26, color: Colors.white),
             ],
           ),
         ],
@@ -517,7 +561,7 @@ class _ReliabilityCardState extends State<_ReliabilityCard>
               const SizedBox(height: 6),
               _line(
                 'Exact alarms are off. Android may delay the ring or skip it '
-                    'when the phone is idle. Allow exact alarms for Awake.',
+                    'when the phone is idle. Allow exact alarms for awake.',
                 'Allow exact alarms',
                 () async {
                   final status = await Permission.scheduleExactAlarm.status;
@@ -536,7 +580,7 @@ class _ReliabilityCardState extends State<_ReliabilityCard>
               _line(
                 'Full-screen alarms are off. The ring screen will not cover '
                     'the lock screen at alarm time. Allow full-screen '
-                    'notifications for Awake.',
+                    'notifications for awake.',
                 'Allow full-screen',
                 () async {
                   await MediaControl.openFullScreenIntentSettings();
@@ -548,7 +592,7 @@ class _ReliabilityCardState extends State<_ReliabilityCard>
             if (hasSpotify && !_spotifyAccess) ...[
               const SizedBox(height: 6),
               _line(
-                'Your Spotify alarm needs notification access before Awake '
+                'Your Spotify alarm needs notification access before awake '
                     'can press play by itself. Without it Spotify opens paused '
                     'and you only hear the backup chime.',
                 'Allow Spotify auto-play',
@@ -563,7 +607,7 @@ class _ReliabilityCardState extends State<_ReliabilityCard>
               const SizedBox(height: 6),
               _line(
                 'The custom tone for "${missingTone.label}" is missing. '
-                    'Awake will ring with ${missingTone.tone.title} until you '
+                    'awake will ring with ${missingTone.tone.title} until you '
                     'pick the file again.',
                 'Review alarm',
                 () async {
@@ -628,10 +672,10 @@ class _QuickTiles extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final tiles = [
-      ('＋', Bg.coral, 'Add alarm', onNewAlarm),
-      ('📷', Bg.mint, 'Test scan', onTestScan),
-      ('🧮', Bg.sky, 'Test math', onTestMath),
-      ('🔥', Bg.lemon, 'Streaks', onStats),
+      (Icons.add_rounded, Bg.coral, 'Add alarm', onNewAlarm),
+      (Icons.camera_alt_rounded, Bg.mint, 'Test scan', onTestScan),
+      (Icons.calculate_rounded, Bg.sky, 'Test math', onTestMath),
+      (Icons.local_fire_department_rounded, Bg.lemon, 'Streaks', onStats),
     ];
     return Row(
       children: [
@@ -639,7 +683,7 @@ class _QuickTiles extends StatelessWidget {
           if (i > 0) const SizedBox(width: 14),
           Expanded(
             child: PastelTile(
-              emoji: tiles[i].$1,
+              icon: tiles[i].$1,
               color: tiles[i].$2,
               label: tiles[i].$3,
               onTap: tiles[i].$4,
@@ -732,11 +776,11 @@ class _AlarmRow extends StatelessWidget {
                   borderRadius: BorderRadius.circular(18),
                 ),
                 alignment: Alignment.center,
-                child: Text(switch (alarm.challengeKind) {
-                  ChallengeKind.math => '🧮',
-                  ChallengeKind.scan => '📷',
-                  ChallengeKind.mix => '🔀',
-                }, style: const TextStyle(fontSize: 22)),
+                child: Icon(
+                  challengeIcon(alarm.challengeKind),
+                  size: 23,
+                  color: Bg.ink,
+                ),
               ),
               const SizedBox(width: 14),
               Expanded(
@@ -858,7 +902,7 @@ class _EmptyState extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 34),
       child: Column(
         children: [
-          const Text('😴', style: TextStyle(fontSize: 44)),
+          const Icon(Icons.bedtime_rounded, size: 46, color: Bg.plum),
           const SizedBox(height: 10),
           const Text(
             'No alarms here',
@@ -913,13 +957,10 @@ class _StatsSheet extends StatelessWidget {
               ),
               child: wins > 0
                   ? const Center(
-                      child: Text(
-                        '☀',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w800,
-                        ),
+                      child: Icon(
+                        Icons.wb_sunny_rounded,
+                        color: Colors.white,
+                        size: 13,
                       ),
                     )
                   : null,
@@ -950,8 +991,14 @@ class _StatsSheet extends StatelessWidget {
             children: [
               Row(
                 children: [
+                  const Icon(
+                    Icons.local_fire_department_rounded,
+                    size: 21,
+                    color: Bg.ctaA,
+                  ),
+                  const SizedBox(width: 7),
                   const Text(
-                    '🔥 Wake streaks',
+                    'Wake streaks',
                     style: TextStyle(
                       fontWeight: FontWeight.w900,
                       fontSize: 18,

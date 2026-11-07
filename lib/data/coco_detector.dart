@@ -1,8 +1,11 @@
 /// On-device object detector used by the scan gate.
 ///
-/// Model: TFLite SSD MobileNet v1 trained on COCO (90 classes), quantized
-/// uint8 input [1,300,300,3], float outputs boxes/classes/scores/num with 10
-/// post-NMS detections (verified locally with a tensor probe).
+/// The app ships two selectable models:
+/// * SSD MobileNet v1 (COCO, 80 named classes): uint8 [1,300,300,3] input and
+///   four post-NMS output tensors.
+/// * YOLO11n fine-tuned on the Awake home-appliance set (5 classes):
+///   float32 [1,416,416,3] input and one [1,9,3549] output tensor.
+///
 /// All inference stays on-device.
 library;
 
@@ -36,10 +39,10 @@ class Detection {
   String toString() => '$label ${(score * 100).round()}%';
 }
 
-enum ModelChoice { ssdMobileNet, yolo11n90 }
+enum ModelChoice { ssdMobileNet, yolo11nTuned }
 
-/// COCO-SSD detector singleton. Call [load] once at startup so the model is
-/// warm long before any alarm rings.
+/// COCO-SSD / YOLO detector singleton. Call [load] once at startup so the
+/// model is warm long before any alarm rings.
 class CocoDetector {
   CocoDetector._();
 
@@ -47,16 +50,40 @@ class CocoDetector {
 
   static ModelChoice selected = ModelChoice.ssdMobileNet;
 
-  static const String modelAssetSsd = 'assets/models/coco_ssd_mobilenet_v1_1.0_quant.tflite';
-  static const String modelAssetYolo = 'assets/models/yolo11n_awake_90class_int8.tflite';
+  static const String modelAssetSsd =
+      'assets/models/coco_ssd_mobilenet_v1_1.0_quant.tflite';
+  static const String modelAssetYolo =
+      'assets/models/yolo11n_awake_appliance.tflite';
   static const labelsAsset = 'assets/models/labels.txt';
+  static const yoloLabelsAsset = 'assets/models/yolo_labels.txt';
 
-  String get _currentAsset => selected == ModelChoice.yolo11n90 ? modelAssetYolo : modelAssetSsd;
+  String get _currentAsset =>
+      selected == ModelChoice.yolo11nTuned ? modelAssetYolo : modelAssetSsd;
+
+  String get _currentLabelsAsset =>
+      selected == ModelChoice.yolo11nTuned ? yoloLabelsAsset : labelsAsset;
 
   /// Only draw and accept clear detections. The class-label fix removes the
   /// biggest source of nonsense; this cutoff removes the remaining weak boxes
   /// without making low-light objects impossible to scan.
   static const double minScore = 0.60;
+
+  /// The tuned YOLO head is more confident on its five appliance classes;
+  /// 0.45 keeps toasters and hair driers usable without opening the gate to
+  /// background noise.
+  static const double minScoreYolo = 0.45;
+
+  /// Greedy non-max suppression for YOLO's raw anchor grid.
+  static const double nmsIou = 0.45;
+
+  /// The tuned YOLO11n checkpoint only knows these five home appliances.
+  static const List<String> yoloClasses = [
+    'microwave',
+    'oven',
+    'toaster',
+    'hair drier',
+    'refrigerator',
+  ];
 
   /// Reject tiny specks. A real held object covers a meaningful part of the
   /// square input; tiny boxes are usually background noise.
@@ -83,6 +110,41 @@ class CocoDetector {
     if (index < 0 || index >= labels.length) return null;
     final label = labels[index];
     return isUsableLabel(label) ? label : null;
+  }
+
+  /// YOLO's five-class head uses a direct 0-based index (0 = microwave).
+  static String? labelForYoloClassId(List<String> labels, int classId) {
+    if (classId < 0 || classId >= labels.length) return null;
+    final label = labels[classId];
+    return isUsableLabel(label) ? label : null;
+  }
+
+  /// The YOLO asset is a purpose-built five-class checkpoint, not the COCO
+  /// map. Fail loudly if the order ever drifts from the weights.
+  static void verifyYoloLabelMap(List<String> labels) {
+    if (labels.length != yoloClasses.length) {
+      throw StateError(
+        'YOLO label map has ${labels.length} labels; expected '
+        '${yoloClasses.length}.',
+      );
+    }
+    for (var i = 0; i < yoloClasses.length; i++) {
+      if (labels[i] != yoloClasses[i]) {
+        throw StateError(
+          'YOLO label map mismatch at index $i: expected '
+          '"${yoloClasses[i]}", got "${labels[i]}".',
+        );
+      }
+    }
+  }
+
+  /// Switches models without leaking the previous interpreter. The next
+  /// [load] call opens the selected asset; an in-flight scan retries through
+  /// [ScanChallengeScreen]'s normal detector setup.
+  static void select(ModelChoice choice) {
+    if (selected == choice) return;
+    selected = choice;
+    I.dispose();
   }
 
   /// The COCO labels file uses `???` for unused class indexes. Those are not
@@ -130,6 +192,11 @@ class CocoDetector {
   List<double> _count = const [];
   int _inputSize = 300;
   int _maxDet = 10;
+  bool _isYolo = false;
+  int _yoloClassesCount = 0;
+  int _yoloAnchors = 0;
+  Float32List _yoloInput = Float32List(0);
+  List<List<List<double>>> _yoloOutput = const [];
   final Map<int, Object> _outputs = {};
 
   bool get isReady => _loaded && _interpreter != null;
@@ -155,13 +222,18 @@ class CocoDetector {
   Future<void> _loadNow() async {
     _loadError = null;
     try {
-      final raw = await rootBundle.loadString(labelsAsset);
+      final raw = await rootBundle.loadString(_currentLabelsAsset);
       _labels = raw
           .split('\n')
           .map((e) => e.trim())
           .where((e) => e.isNotEmpty)
           .toList();
-      verifyLabelMap(_labels);
+      _isYolo = selected == ModelChoice.yolo11nTuned;
+      if (_isYolo) {
+        verifyYoloLabelMap(_labels);
+      } else {
+        verifyLabelMap(_labels);
+      }
 
       final options = InterpreterOptions()..threads = 4;
       final interpreter = await Interpreter.fromAsset(
@@ -176,25 +248,51 @@ class CocoDetector {
       }
       _inputSize = inShape[1];
 
-      final out = interpreter.getOutputTensors();
-      _maxDet = out.length >= 2 && out[0].shape.length == 3
-          ? out[0].shape[1]
-          : 10;
+      if (_isYolo) {
+        final outShape = interpreter.getOutputTensor(0).shape;
+        if (outShape.length != 3 || outShape[0] != 1) {
+          interpreter.close();
+          throw StateError('Unexpected YOLO output shape $outShape');
+        }
+        _yoloClassesCount = outShape[1] - 4;
+        _yoloAnchors = outShape[2];
+        if (_yoloClassesCount != _labels.length) {
+          interpreter.close();
+          throw StateError(
+            'YOLO output has $_yoloClassesCount classes, label map has '
+            '${_labels.length}.',
+          );
+        }
+        _yoloInput = Float32List(_inputSize * _inputSize * 3);
+        _yoloOutput = [
+          List.generate(
+            _yoloClassesCount + 4,
+            (_) => List.filled(_yoloAnchors, 0.0),
+          ),
+        ];
+        _outputs[0] = _yoloOutput;
+      } else {
+        final out = interpreter.getOutputTensors();
+        _maxDet = out.length >= 2 && out[0].shape.length == 3
+            ? out[0].shape[1]
+            : 10;
 
-      _boxes = [List.generate(_maxDet, (_) => List.filled(4, 0.0))];
-      _classes = [List.filled(_maxDet, 0.0)];
-      _scores = [List.filled(_maxDet, 0.0)];
-      _count = [0.0];
-      _outputs[0] = _boxes;
-      _outputs[1] = _classes;
-      _outputs[2] = _scores;
-      _outputs[3] = _count;
+        _boxes = [List.generate(_maxDet, (_) => List.filled(4, 0.0))];
+        _classes = [List.filled(_maxDet, 0.0)];
+        _scores = [List.filled(_maxDet, 0.0)];
+        _count = [0.0];
+        _outputs[0] = _boxes;
+        _outputs[1] = _classes;
+        _outputs[2] = _scores;
+        _outputs[3] = _count;
+      }
 
       _interpreter = interpreter;
       _loaded = true;
       debugPrint(
         'CocoDetector ready: ${_labels.length} labels, '
-        'input ${_inputSize}x$_inputSize, maxDet $_maxDet',
+        'input ${_inputSize}x$_inputSize, '
+        '${_isYolo ? 'YOLO $_yoloAnchors anchors' : 'maxDet $_maxDet'}',
       );
     } catch (e) {
       _loadError = e;
@@ -206,11 +304,26 @@ class CocoDetector {
   int get inputSize => _inputSize;
 
   /// Runs one frame. Input: tight RGB bytes (`inputSize² × 3`), raw 0..255.
-  /// Returns detections above [minScore], best first.
+  /// Returns detections above the active model's cutoff, best first.
   List<Detection> detect(Uint8List rgb) {
     final interpreter = _interpreter;
     if (interpreter == null || !_loaded) return const [];
     if (rgb.length != _inputSize * _inputSize * 3) return const [];
+    if (_isYolo) {
+      for (var i = 0; i < rgb.length; i++) {
+        _yoloInput[i] = rgb[i] / 255.0;
+      }
+      // Pass raw float bytes. A flat Float32List makes tflite_flutter infer a
+      // rank-0 input shape and resize the tensor, which makes the model's first
+      // PAD op fail. A Uint8List view is treated as opaque bytes and keeps the
+      // model's [1,416,416,3] shape.
+      interpreter.runForMultipleInputs(
+        [_yoloInput.buffer.asUint8List()],
+        _outputs,
+      );
+      return _postprocessYolo();
+    }
+
     interpreter.runForMultipleInputs([rgb], _outputs);
 
     final n = _ic(_count[0].toInt(), 0, _maxDet);
@@ -234,13 +347,112 @@ class CocoDetector {
     return found;
   }
 
+  List<Detection> _postprocessYolo() {
+    final out = _yoloOutput[0];
+    final candidates = <_DetectionCandidate>[];
+    for (var a = 0; a < _yoloAnchors; a++) {
+      var bestScore = 0.0;
+      var bestClass = -1;
+      for (var c = 0; c < _yoloClassesCount; c++) {
+        final score = out[4 + c][a];
+        if (score > bestScore) {
+          bestScore = score;
+          bestClass = c;
+        }
+      }
+      if (bestClass < 0 || bestScore < minScoreYolo) continue;
+
+      var cx = out[0][a];
+      var cy = out[1][a];
+      var w = out[2][a];
+      var h = out[3][a];
+      // The exported graph may return normalized or pixel-space xywh.
+      final maxCoord = math.max(
+        math.max(cx.abs(), cy.abs()),
+        math.max(w.abs(), h.abs()),
+      );
+      if (maxCoord > 2.0) {
+        cx /= _inputSize;
+        cy /= _inputSize;
+        w /= _inputSize;
+        h /= _inputSize;
+      }
+      final box = Rect.fromLTRB(
+        cx - w / 2,
+        cy - h / 2,
+        cx + w / 2,
+        cy + h / 2,
+      ).intersect(const Rect.fromLTWH(0, 0, 1, 1));
+      if (!isPlausibleBox(box)) continue;
+      candidates.add(
+        _DetectionCandidate(classId: bestClass, score: bestScore, box: box),
+      );
+    }
+
+    candidates.sort((a, b) => b.score.compareTo(a.score));
+    final kept = <_DetectionCandidate>[];
+    for (final candidate in candidates) {
+      final overlaps = kept.any(
+        (other) => _iou(other.box, candidate.box) > nmsIou,
+      );
+      if (overlaps) continue;
+      kept.add(candidate);
+      if (kept.length >= maxDetections) break;
+    }
+
+    final found = <Detection>[];
+    for (final candidate in kept) {
+      final label = labelForYoloClassId(_labels, candidate.classId);
+      if (label == null) continue;
+      found.add(
+        Detection(
+          classId: candidate.classId,
+          label: label,
+          score: candidate.score,
+          box: candidate.box,
+        ),
+      );
+    }
+    return found;
+  }
+
+  static double _iou(Rect a, Rect b) {
+    final left = math.max(a.left, b.left);
+    final top = math.max(a.top, b.top);
+    final right = math.min(a.right, b.right);
+    final bottom = math.min(a.bottom, b.bottom);
+    final intersection =
+        math.max(0.0, right - left) * math.max(0.0, bottom - top);
+    if (intersection <= 0) return 0;
+    final union = a.width * a.height + b.width * b.height - intersection;
+    return union <= 0 ? 0 : intersection / union;
+  }
+
   void dispose() {
     _interpreter?.close();
     _interpreter = null;
     _loaded = false;
     _loading = null;
     _loadError = null;
+    _isYolo = false;
+    _yoloClassesCount = 0;
+    _yoloAnchors = 0;
+    _yoloInput = Float32List(0);
+    _yoloOutput = const [];
+    _outputs.clear();
   }
+}
+
+class _DetectionCandidate {
+  const _DetectionCandidate({
+    required this.classId,
+    required this.score,
+    required this.box,
+  });
+
+  final int classId;
+  final double score;
+  final Rect box;
 }
 
 /// Reusable tightly-packed RGB buffer for [yuvToSquareRgb].

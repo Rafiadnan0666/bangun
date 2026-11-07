@@ -1,7 +1,8 @@
 import 'dart:io';
 
-import 'package:awake/core/format.dart';
+import 'package:awake/core/icons.dart';
 import 'package:awake/data/models.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -21,6 +22,14 @@ void main() {
       for (final target in kDefaultScanTargets) {
         expect(kPickableTargets, contains(target));
       }
+    });
+
+    test('the tuned YOLO pool is a subset of pickable COCO classes', () {
+      expect(kYoloScanTargets, hasLength(5));
+      expect(kYoloScanTargets.toSet(), hasLength(5));
+      expect(kPickableTargets, containsAll(kYoloScanTargets));
+      expect(kYoloScanTargets, contains('refrigerator'));
+      expect(kYoloScanTargets, isNot(contains('glass')));
     });
   });
 
@@ -45,12 +54,12 @@ void main() {
       expect(labels, kCocoScanTargets);
     });
 
-    test('every pickable target has a real emoji', () {
+    test('every pickable target has a dedicated icon', () {
       for (final target in kPickableTargets) {
         expect(
-          targetEmoji(target),
-          isNot('🎯'),
-          reason: 'missing emoji for $target',
+          targetIcon(target),
+          isNot(Icons.center_focus_strong_rounded),
+          reason: 'missing icon for $target',
         );
       }
     });
@@ -147,10 +156,10 @@ void main() {
     });
   });
 
-  group('targetEmoji', () {
-    test('composite targets inherit a familiar emoji', () {
-      expect(targetEmoji('glass'), targetEmoji('wine glass'));
-      expect(targetEmoji('screen'), targetEmoji('tv'));
+  group('targetIcon', () {
+    test('composite targets inherit a familiar icon', () {
+      expect(targetIcon('glass'), targetIcon('wine glass'));
+      expect(targetIcon('screen'), targetIcon('tv'));
     });
   });
 }

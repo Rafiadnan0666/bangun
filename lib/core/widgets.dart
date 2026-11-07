@@ -1,6 +1,69 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import 'palette.dart';
+
+/// One-shot fade + rise used to stagger the dashboard into view.
+class Reveal extends StatefulWidget {
+  const Reveal({
+    super.key,
+    required this.child,
+    this.delay = Duration.zero,
+    this.offset = 18,
+  });
+
+  final Widget child;
+  final Duration delay;
+  final double offset;
+
+  @override
+  State<Reveal> createState() => _RevealState();
+}
+
+class _RevealState extends State<Reveal>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 420),
+  );
+  late final Animation<double> _fade = CurvedAnimation(
+    parent: _controller,
+    curve: Curves.easeOutCubic,
+  );
+  late final Animation<Offset> _slide = Tween<Offset>(
+    begin: Offset(0, widget.offset / 100),
+    end: Offset.zero,
+  ).animate(_fade);
+  Timer? _timer;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.delay == Duration.zero) {
+      _controller.forward();
+    } else {
+      _timer = Timer(widget.delay, () {
+        if (mounted) _controller.forward();
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FadeTransition(
+      opacity: _fade,
+      child: SlideTransition(position: _slide, child: widget.child),
+    );
+  }
+}
 
 /// White rounded card, standard Awake surface.
 class BgCard extends StatelessWidget {
@@ -39,13 +102,13 @@ class InkPill extends StatelessWidget {
     super.key,
     required this.label,
     required this.onTap,
-    this.icon = '⚡',
+    this.icon = Icons.bolt_rounded,
     this.enabled = true,
   });
 
   final String label;
   final VoidCallback? onTap;
-  final String icon;
+  final IconData icon;
   final bool enabled;
 
   @override
@@ -71,7 +134,7 @@ class InkPill extends StatelessWidget {
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text(icon, style: const TextStyle(fontSize: 18)),
+                      Icon(icon, size: 19, color: Colors.white),
                       const SizedBox(width: 8),
                       Text(
                         label,
@@ -100,13 +163,13 @@ class CtaPill extends StatelessWidget {
     required this.label,
     required this.onTap,
     this.height = 58,
-    this.icon = '⚡',
+    this.icon = Icons.bolt_rounded,
   });
 
   final String label;
   final VoidCallback? onTap;
   final double height;
-  final String icon;
+  final IconData icon;
 
   @override
   Widget build(BuildContext context) {
@@ -131,7 +194,7 @@ class CtaPill extends StatelessWidget {
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text(icon, style: const TextStyle(fontSize: 18)),
+                      Icon(icon, size: 19, color: Colors.white),
                       const SizedBox(width: 8),
                       Text(
                         label,
@@ -157,14 +220,14 @@ class CtaPill extends StatelessWidget {
 class PastelTile extends StatelessWidget {
   const PastelTile({
     super.key,
-    required this.emoji,
+    required this.icon,
     required this.color,
     required this.label,
     required this.onTap,
     this.size = 64,
   });
 
-  final String emoji;
+  final IconData icon;
   final Color color;
   final String label;
   final VoidCallback onTap;
@@ -193,7 +256,7 @@ class PastelTile extends StatelessWidget {
               ],
             ),
             alignment: Alignment.center,
-            child: Text(emoji, style: TextStyle(fontSize: size * 0.45)),
+            child: Icon(icon, size: size * 0.42, color: Bg.ink),
           ),
           const SizedBox(height: 8),
           Text(
@@ -245,14 +308,14 @@ class StatusRow extends StatelessWidget {
   }
 }
 
-/// Selection chip with emoji; used for tones, targets, modes.
-class EmojiChip extends StatelessWidget {
-  const EmojiChip({
+/// Selection chip with an optional leading icon; used for targets and modes.
+class SelectionChip extends StatelessWidget {
+  const SelectionChip({
     super.key,
     required this.label,
     required this.selected,
     required this.onTap,
-    this.emoji,
+    this.icon,
     this.color,
     this.idleBorder = Bg.hairline,
   });
@@ -260,7 +323,7 @@ class EmojiChip extends StatelessWidget {
   final String label;
   final bool selected;
   final VoidCallback? onTap;
-  final String? emoji;
+  final IconData? icon;
   final Color? color;
   final Color idleBorder;
 
@@ -286,8 +349,12 @@ class EmojiChip extends StatelessWidget {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              if (emoji != null) ...[
-                Text(emoji!, style: const TextStyle(fontSize: 14)),
+              if (icon != null) ...[
+                Icon(
+                  icon,
+                  size: 15,
+                  color: selected ? Bg.ink : Bg.sub,
+                ),
                 const SizedBox(width: 6),
               ],
               Text(
@@ -350,7 +417,7 @@ class SectionTitle extends StatelessWidget {
   const SectionTitle(this.text, {super.key, this.icon});
 
   final String text;
-  final String? icon;
+  final IconData? icon;
 
   @override
   Widget build(BuildContext context) {
@@ -359,7 +426,7 @@ class SectionTitle extends StatelessWidget {
       child: Row(
         children: [
           if (icon != null) ...[
-            Text(icon!, style: const TextStyle(fontSize: 15)),
+            Icon(icon, size: 16, color: Bg.ink),
             const SizedBox(width: 6),
           ],
           Text(

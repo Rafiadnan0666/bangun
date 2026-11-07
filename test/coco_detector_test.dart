@@ -82,6 +82,31 @@ void main() {
         throwsStateError,
       );
     });
+
+    test('YOLO class ids map directly and its five-label guard passes', () {
+      final raw = File('assets/models/yolo_labels.txt').readAsStringSync();
+      final labels = raw
+          .split('\n')
+          .map((e) => e.trim())
+          .where((e) => e.isNotEmpty)
+          .toList();
+      expect(labels, CocoDetector.yoloClasses);
+      expect(() => CocoDetector.verifyYoloLabelMap(labels), returnsNormally);
+      expect(CocoDetector.labelForYoloClassId(labels, 0), 'microwave');
+      expect(CocoDetector.labelForYoloClassId(labels, 4), 'refrigerator');
+      expect(CocoDetector.labelForYoloClassId(labels, -1), isNull);
+      expect(CocoDetector.labelForYoloClassId(labels, 5), isNull);
+    });
+
+    test('a drifted YOLO label asset is rejected', () {
+      final labels = [...CocoDetector.yoloClasses];
+      labels[2] = 'oven';
+      expect(() => CocoDetector.verifyYoloLabelMap(labels), throwsStateError);
+      expect(
+        () => CocoDetector.verifyYoloLabelMap(labels.sublist(1)),
+        throwsStateError,
+      );
+    });
   });
 
   group('RgbFrameBuffer', () {

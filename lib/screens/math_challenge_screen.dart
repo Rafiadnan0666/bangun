@@ -131,7 +131,11 @@ class _MathChallengeScreenState extends State<MathChallengeScreen> {
               children: [
                 Row(
                   children: [
-                    const Text('🧮', style: TextStyle(fontSize: 20)),
+                    const Icon(
+                      Icons.calculate_rounded,
+                      size: 21,
+                      color: Bg.ink,
+                    ),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
@@ -244,10 +248,26 @@ class _MathChallengeScreenState extends State<MathChallengeScreen> {
                 if (!_isTrial)
                   const Padding(
                     padding: EdgeInsets.symmetric(vertical: 4),
-                    child: Text(
-                      '🔒 can\'t quit — wrong answer = fresh start on this problem',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(fontSize: 10.5, color: Bg.subFaint),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.lock_rounded,
+                          size: 12,
+                          color: Bg.subFaint,
+                        ),
+                        SizedBox(width: 5),
+                        Flexible(
+                          child: Text(
+                            'can\'t quit - wrong answer = fresh start on this problem',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontSize: 10.5,
+                              color: Bg.subFaint,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 const Spacer(),

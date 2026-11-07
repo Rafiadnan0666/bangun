@@ -9,7 +9,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:provider/provider.dart';
 
 import '../core/build_info.dart';
-import '../core/format.dart';
+import '../core/icons.dart';
 import '../core/palette.dart';
 import '../core/widgets.dart';
 import '../data/alarm_repository.dart';
@@ -61,9 +61,18 @@ class _ScanChallengeScreenState extends State<ScanChallengeScreen>
 
   bool get _isTrial => widget.alarm.id == trialAlarmId;
 
-  List<String> get _targetPool => widget.alarm.scanTargets.isNotEmpty
-      ? widget.alarm.scanTargets
-      : kDefaultScanTargets;
+  List<String> get _targetPool {
+    var pool = widget.alarm.scanTargets.isNotEmpty
+        ? widget.alarm.scanTargets
+        : kDefaultScanTargets;
+    if (CocoDetector.selected == ModelChoice.yolo11nTuned) {
+      final supported = pool
+          .where(kYoloScanTargets.contains)
+          .toList(growable: false);
+      pool = supported.isEmpty ? kYoloScanTargets : supported;
+    }
+    return pool;
+  }
 
   /// Show every clear detection, not only the current target. Target matches
   /// are highlighted in green, while other objects stay visible so the screen
@@ -435,11 +444,11 @@ class _ScanChallengeScreenState extends State<ScanChallengeScreen>
               ),
             if (_permissionDenied)
               _MessageCard(
-                icon: '📷',
+                icon: Icons.camera_alt_rounded,
                 title: 'Camera permission needed',
                 body: _permissionPermanentlyDenied
                     ? 'Camera access is blocked. Open Android Settings, choose '
-                          'Permissions, then allow Camera for Awake.'
+                          'Permissions, then allow Camera for awake.'
                     : 'The scan gate runs on-device and needs the camera. Your '
                           'frame is processed locally, nothing is uploaded.',
                 actionLabel: _permissionPermanentlyDenied
@@ -455,7 +464,7 @@ class _ScanChallengeScreenState extends State<ScanChallengeScreen>
               )
             else if (_error != null)
               _MessageCard(
-                icon: '⚠️',
+                icon: Icons.warning_amber_rounded,
                 title: 'Camera unavailable',
                 body: _error!,
                 actionLabel: 'Try again',
@@ -465,7 +474,7 @@ class _ScanChallengeScreenState extends State<ScanChallengeScreen>
               )
             else if (_detectorError != null)
               _MessageCard(
-                icon: 'AI',
+                icon: Icons.memory_rounded,
                 title: 'On-device AI failed',
                 body: '${_detectorError!}\n\nRetry the object detector.',
                 actionLabel: 'Retry AI',
@@ -785,10 +794,11 @@ class _TargetCard extends StatelessWidget {
                   ),
                   child: FadeTransition(opacity: animation, child: child),
                 ),
-                child: Text(
-                  targetEmoji(target),
-                  key: ValueKey('emoji-$target'),
-                  style: TextStyle(fontSize: compact ? 26 : 30),
+                child: Icon(
+                  targetIcon(target),
+                  key: ValueKey('icon-$target'),
+                  size: compact ? 28 : 32,
+                  color: Bg.ink,
                 ),
               ),
               const SizedBox(width: 12),
@@ -1134,9 +1144,10 @@ class _DetectionChip extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(
-              targetEmoji(detection.label),
-              style: const TextStyle(fontSize: 12),
+            Icon(
+              targetIcon(detection.label),
+              size: 13,
+              color: matched ? Colors.white : Bg.ink,
             ),
             const SizedBox(width: 5),
             Text(
@@ -1203,10 +1214,7 @@ class _ScanHintSheet extends StatelessWidget {
                   const SizedBox(height: 16),
                   Row(
                     children: [
-                      Text(
-                        targetEmoji(target),
-                        style: const TextStyle(fontSize: 32),
-                      ),
+                      Icon(targetIcon(target), size: 34, color: Bg.ink),
                       const SizedBox(width: 12),
                       Expanded(
                         child: Column(
@@ -1285,13 +1293,24 @@ class _ScanHintSheet extends StatelessWidget {
                               color: Bg.cardSoft,
                               borderRadius: BorderRadius.circular(999),
                             ),
-                            child: Text(
-                              '${targetEmoji(label)} $label',
-                              style: const TextStyle(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w700,
-                                color: Bg.plum,
-                              ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  targetIcon(label),
+                                  size: 13,
+                                  color: Bg.plum,
+                                ),
+                                const SizedBox(width: 4),
+                                Text(
+                                  label,
+                                  style: const TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w700,
+                                    color: Bg.plum,
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
                       ],
@@ -1320,7 +1339,7 @@ class _ScanHintSheet extends StatelessWidget {
                   ],
                   const SizedBox(height: 16),
                   InkPill(
-                    icon: '👍',
+                    icon: Icons.thumb_up_rounded,
                     label: 'Got it',
                     onTap: () => Navigator.of(context).pop(),
                   ),
@@ -1386,7 +1405,7 @@ class _MessageCard extends StatelessWidget {
     required this.onAction,
   });
 
-  final String icon;
+  final IconData icon;
   final String title;
   final String body;
   final String actionLabel;
@@ -1410,7 +1429,7 @@ class _MessageCard extends StatelessWidget {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text(icon, style: const TextStyle(fontSize: 40)),
+                      Icon(icon, size: 42, color: Bg.ink),
                       const SizedBox(height: 10),
                       Text(
                         title,
@@ -1428,7 +1447,11 @@ class _MessageCard extends StatelessWidget {
                         style: const TextStyle(fontSize: 12.5, color: Bg.sub),
                       ),
                       const SizedBox(height: 16),
-                      InkPill(icon: '⚡', label: actionLabel, onTap: onAction),
+                      InkPill(
+                        icon: Icons.bolt_rounded,
+                        label: actionLabel,
+                        onTap: onAction,
+                      ),
                     ],
                   ),
                 ),
@@ -1524,7 +1547,7 @@ class _BoxesPainter extends CustomPainter {
       // Named tag, clamped to the canvas.
       final tp = TextPainter(
         text: TextSpan(
-          text: '${targetEmoji(item.text)} ${item.text}',
+          text: item.text,
           style: TextStyle(
             fontSize: 11,
             fontWeight: FontWeight.w800,

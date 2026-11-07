@@ -1,0 +1,5 @@
+microwave
+oven
+toaster
+hair drier
+refrigerator

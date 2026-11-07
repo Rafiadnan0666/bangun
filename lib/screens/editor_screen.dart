@@ -8,9 +8,11 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../core/format.dart';
+import '../core/icons.dart';
 import '../core/palette.dart';
 import '../core/widgets.dart';
 import '../data/alarm_repository.dart';
+import '../data/coco_detector.dart';
 import '../data/media_control.dart';
 import '../data/models.dart';
 import '../data/spotify_launch.dart';
@@ -50,6 +52,11 @@ class _EditorScreenState extends State<EditorScreen> {
 
   bool get _isEditing => widget.existing != null;
 
+  bool get _yoloSelected => CocoDetector.selected == ModelChoice.yolo11nTuned;
+
+  List<String> get _supportedTargets =>
+      _yoloSelected ? kYoloScanTargets : kPickableTargets;
+
   @override
   void initState() {
     super.initState();
@@ -65,7 +72,14 @@ class _EditorScreenState extends State<EditorScreen> {
     _days = a == null ? {1, 2, 3, 4, 5, 6, 7} : a.days.toSet();
     _kind = a?.challengeKind ?? ChallengeKind.math;
     _problems = a?.mathProblems ?? 3;
-    _targets = a?.scanTargets.toSet() ?? kDefaultScanTargets.toSet();
+    final defaultTargets = _yoloSelected
+        ? kYoloScanTargets
+        : kDefaultScanTargets;
+    _targets = a?.scanTargets.toSet() ?? defaultTargets.toSet();
+    if (_yoloSelected) {
+      _targets.removeWhere((target) => !kYoloScanTargets.contains(target));
+      if (_targets.isEmpty) _targets.addAll(kYoloScanTargets);
+    }
     _toneKind = a?.toneKind ?? ToneKind.builtin;
     _tone = a?.tone ?? BuiltInTone.morningBricks;
     _filePath = a?.filePath;
@@ -192,13 +206,33 @@ class _EditorScreenState extends State<EditorScreen> {
   Future<void> _pickFile() async {
     try {
       final result = await FilePicker.platform.pickFiles(
-        type: FileType.audio,
+        type: FileType.any,
         withData: true,
+        allowMultiple: false,
+        dialogTitle: 'Pick an audio file',
       );
       final picked = result?.files.firstOrNull;
       if (picked == null) return;
       final sourcePath = picked.path;
       final bytes = picked.bytes;
+      final ext = (picked.extension ?? '').toLowerCase();
+      const audioExts = {
+        'mp3',
+        'wav',
+        'm4a',
+        'aac',
+        'ogg',
+        'oga',
+        'opus',
+        'flac',
+        'amr',
+      };
+      if (ext.isNotEmpty && !audioExts.contains(ext)) {
+        _showMessage(
+          'That file is not audio. Pick mp3, wav, m4a, aac, ogg or flac.',
+        );
+        return;
+      }
       if (sourcePath == null && bytes == null) {
         _showMessage('That file could not be opened. Try another audio file.');
         return;
@@ -208,20 +242,25 @@ class _EditorScreenState extends State<EditorScreen> {
       // file" alarm ends up silent (or default-toned) after a while.
       final previous = _filePath;
       String durablePath;
-      if (sourcePath != null) {
-        final source = File(sourcePath);
-        final size = await source.length();
+      final localFile = sourcePath != null && File(sourcePath).existsSync()
+          ? File(sourcePath)
+          : null;
+      if (localFile != null) {
+        final size = await localFile.length();
         if (size > ToneFiles.maxBytes) {
           _showMessage('Pick an audio file smaller than 25 MB.');
           return;
         }
-        durablePath = await ToneFiles.store(source, picked.extension);
-      } else {
-        if (bytes!.length > ToneFiles.maxBytes) {
+        durablePath = await ToneFiles.store(localFile, picked.extension);
+      } else if (bytes != null) {
+        if (bytes.length > ToneFiles.maxBytes) {
           _showMessage('Pick an audio file smaller than 25 MB.');
           return;
         }
         durablePath = await ToneFiles.storeBytes(bytes, picked.extension);
+      } else {
+        _showMessage('That file could not be opened. Try another audio file.');
+        return;
       }
       if (!mounted) {
         await ToneFiles.deleteIfUnreferenced(durablePath, const []);
@@ -277,11 +316,11 @@ class _EditorScreenState extends State<EditorScreen> {
         backgroundColor: Bg.card,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(26)),
         title: const Text(
-          'Let Awake start Spotify',
+          'Let awake start Spotify',
           style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18),
         ),
         content: const Text(
-          'Android only lets Awake press play inside Spotify when '
+          'Android only lets awake press play inside Spotify when '
           'notification access is on. It is a one-time switch, used only for '
           'your alarm link.\n\nWithout it Spotify opens paused, so you only '
           'hear the backup chime.',
@@ -290,7 +329,10 @@ class _EditorScreenState extends State<EditorScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Continue without', style: TextStyle(color: Bg.sub)),
+            child: const Text(
+              'Continue without',
+              style: TextStyle(color: Bg.sub),
+            ),
           ),
           FilledButton(
             style: FilledButton.styleFrom(backgroundColor: Bg.ctaA),
@@ -420,7 +462,7 @@ class _EditorScreenState extends State<EditorScreen> {
     final message = switch (result) {
       SpotifyStart.playing => 'Spotify is playing your link now.',
       SpotifyStart.opened =>
-        'Spotify opened, but it needs notification access before Awake '
+        'Spotify opened, but it needs notification access before awake '
             'can press play by itself. Enable it below.',
       SpotifyStart.unavailable =>
         'Spotify is not installed on this device — no link can play here.',
@@ -512,6 +554,7 @@ class _EditorScreenState extends State<EditorScreen> {
                     kind: _kind,
                     problems: _problems,
                     targets: _targets,
+                    supportedTargets: _supportedTargets,
                     onKind: (k) => setState(() => _kind = k),
                     onProblems: (n) => setState(() => _problems = n),
                     onToggleTarget: (t) {
@@ -526,7 +569,13 @@ class _EditorScreenState extends State<EditorScreen> {
                     },
                     onSelectCommon: () {
                       HapticFeedback.selectionClick();
-                      setState(() => _targets.addAll(kDefaultScanTargets));
+                      setState(() {
+                        _targets.addAll(
+                          _yoloSelected
+                              ? kYoloScanTargets
+                              : kDefaultScanTargets,
+                        );
+                      });
                     },
                     onClearTargets: () {
                       HapticFeedback.selectionClick();
@@ -587,7 +636,7 @@ class _EditorFooter extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(20, 10, 20, 10),
       child: SafeArea(
         top: false,
-        child: CtaPill(icon: '💾', label: label, onTap: onTap),
+        child: CtaPill(icon: Icons.save_rounded, label: label, onTap: onTap),
       ),
     );
   }
@@ -676,7 +725,11 @@ class _TimeCard extends StatelessWidget {
                   const SizedBox(width: 10),
                   const Padding(
                     padding: EdgeInsets.only(bottom: 14),
-                    child: Text('⌚', style: TextStyle(fontSize: 18)),
+                    child: Icon(
+                      Icons.schedule_rounded,
+                      size: 18,
+                      color: Bg.sub,
+                    ),
                   ),
                 ],
               ),
@@ -750,7 +803,7 @@ class _StepperRow extends StatelessWidget {
       ),
       child: Row(
         children: [
-          _RoundBtn(icon: '−', onTap: onLess),
+          _RoundBtn(icon: Icons.remove_rounded, onTap: onLess),
           Expanded(
             child: Column(
               children: [
@@ -769,7 +822,7 @@ class _StepperRow extends StatelessWidget {
               ],
             ),
           ),
-          _RoundBtn(icon: '＋', onTap: onMore),
+          _RoundBtn(icon: Icons.add_rounded, onTap: onMore),
         ],
       ),
     );
@@ -779,7 +832,7 @@ class _StepperRow extends StatelessWidget {
 class _RoundBtn extends StatelessWidget {
   const _RoundBtn({required this.icon, required this.onTap});
 
-  final String icon;
+  final IconData icon;
   final VoidCallback onTap;
 
   @override
@@ -792,14 +845,7 @@ class _RoundBtn extends StatelessWidget {
         height: 34,
         decoration: const BoxDecoration(color: Bg.card, shape: BoxShape.circle),
         alignment: Alignment.center,
-        child: Text(
-          icon,
-          style: const TextStyle(
-            fontWeight: FontWeight.w800,
-            fontSize: 15,
-            color: Bg.ink,
-          ),
-        ),
+        child: Icon(icon, size: 18, color: Bg.ink),
       ),
     );
   }
@@ -824,7 +870,7 @@ class _RepeatCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const SectionTitle('Repeat', icon: '🔁'),
+          const SectionTitle('Repeat', icon: Icons.repeat_rounded),
           Row(
             children: [
               for (final m in RepeatMode.values)
@@ -911,6 +957,7 @@ class _ChallengeCard extends StatelessWidget {
     required this.kind,
     required this.problems,
     required this.targets,
+    required this.supportedTargets,
     required this.onKind,
     required this.onProblems,
     required this.onToggleTarget,
@@ -921,6 +968,7 @@ class _ChallengeCard extends StatelessWidget {
   final ChallengeKind kind;
   final int problems;
   final Set<String> targets;
+  final List<String> supportedTargets;
   final ValueChanged<ChallengeKind> onKind;
   final ValueChanged<int> onProblems;
   final ValueChanged<String> onToggleTarget;
@@ -928,14 +976,24 @@ class _ChallengeCard extends StatelessWidget {
   final VoidCallback onClearTargets;
 
   static const _kinds = [
-    (ChallengeKind.math, '🧮', 'Math grind', 'Solve arithmetic at 6 a.m.'),
+    (
+      ChallengeKind.math,
+      Icons.calculate_rounded,
+      'Math grind',
+      'Solve arithmetic at 6 a.m.',
+    ),
     (
       ChallengeKind.scan,
-      '📷',
+      Icons.camera_alt_rounded,
       'Object scan',
       'Point the camera at real things',
     ),
-    (ChallengeKind.mix, '🔀', 'Pick at ring', 'Both options when it rings'),
+    (
+      ChallengeKind.mix,
+      Icons.shuffle_rounded,
+      'Pick at ring',
+      'Both options when it rings',
+    ),
   ];
 
   @override
@@ -944,7 +1002,7 @@ class _ChallengeCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const SectionTitle('Challenge to unlock', icon: '🔒'),
+          const SectionTitle('Challenge to unlock', icon: Icons.lock_rounded),
           for (final k in _kinds)
             GestureDetector(
               onTap: () => onKind(k.$1),
@@ -965,7 +1023,7 @@ class _ChallengeCard extends StatelessWidget {
                 ),
                 child: Row(
                   children: [
-                    Text(k.$2, style: const TextStyle(fontSize: 22)),
+                    Icon(k.$2, size: 24, color: Bg.ink),
                     const SizedBox(width: 12),
                     Expanded(
                       child: Column(
@@ -991,7 +1049,11 @@ class _ChallengeCard extends StatelessWidget {
                       ),
                     ),
                     if (kind == k.$1)
-                      const Text('✅', style: TextStyle(fontSize: 15)),
+                      const Icon(
+                        Icons.check_circle_rounded,
+                        size: 18,
+                        color: Bg.success,
+                      ),
                   ],
                 ),
               ),
@@ -1015,7 +1077,7 @@ class _ChallengeCard extends StatelessWidget {
                             for (final n in const [3, 5, 7])
                               Padding(
                                 padding: const EdgeInsets.only(right: 10),
-                                child: EmojiChip(
+                                child: SelectionChip(
                                   label: '$n',
                                   selected: problems == n,
                                   color: Bg.sky,
@@ -1040,6 +1102,7 @@ class _ChallengeCard extends StatelessWidget {
                 : kind == ChallengeKind.scan
                 ? _TargetPicker(
                     selected: targets,
+                    supportedTargets: supportedTargets,
                     onToggle: onToggleTarget,
                     onSelectCommon: onSelectCommon,
                     onClearTargets: onClearTargets,
@@ -1062,12 +1125,14 @@ class _ChallengeCard extends StatelessWidget {
 class _TargetPicker extends StatefulWidget {
   const _TargetPicker({
     required this.selected,
+    required this.supportedTargets,
     required this.onToggle,
     required this.onSelectCommon,
     required this.onClearTargets,
   });
 
   final Set<String> selected;
+  final List<String> supportedTargets;
   final ValueChanged<String> onToggle;
   final VoidCallback onSelectCommon;
   final VoidCallback onClearTargets;
@@ -1078,13 +1143,26 @@ class _TargetPicker extends StatefulWidget {
 
 class _TargetPickerState extends State<_TargetPicker> {
   late final TextEditingController _searchCtrl;
-  String _group = 'Common';
+  late String _group;
   String _query = '';
+
+  bool get _yoloOnly =>
+      widget.supportedTargets.length == kYoloScanTargets.length;
+
+  List<ScanTargetGroup> get _groups => kTargetGroups
+      .where(
+        (group) => group.targets.any(
+          (target) => widget.supportedTargets.contains(target),
+        ),
+      )
+      .toList(growable: false);
 
   @override
   void initState() {
     super.initState();
     _searchCtrl = TextEditingController();
+    final groups = _groups;
+    _group = groups.isEmpty ? 'Common' : groups.first.name;
   }
 
   @override
@@ -1107,7 +1185,11 @@ class _TargetPickerState extends State<_TargetPicker> {
   Widget build(BuildContext context) {
     final query = _query.trim().toLowerCase();
     final searching = query.isNotEmpty;
-    final source = searching ? kPickableTargets : scanTargetsForGroup(_group);
+    final source = searching
+        ? widget.supportedTargets
+        : scanTargetsForGroup(_group)
+              .where((target) => widget.supportedTargets.contains(target))
+              .toList(growable: false);
     final matches = source
         .where((target) => !searching || target.contains(query))
         .toList(growable: false);
@@ -1117,6 +1199,7 @@ class _TargetPickerState extends State<_TargetPicker> {
     ];
     final selectedCount = widget.selected.length;
     final easyCount = widget.selected.where(kEasyScanTargets.contains).length;
+    final groups = _groups;
 
     return Padding(
       padding: const EdgeInsets.only(top: 6),
@@ -1128,7 +1211,9 @@ class _TargetPickerState extends State<_TargetPicker> {
             onChanged: (value) => setState(() => _query = value),
             textInputAction: TextInputAction.search,
             decoration: InputDecoration(
-              hintText: 'Search all ${kCocoScanTargets.length} COCO classes...',
+              hintText: _yoloOnly
+                  ? 'Search ${widget.supportedTargets.length} appliance classes...'
+                  : 'Search all ${widget.supportedTargets.length} COCO classes...',
               isDense: true,
               prefixIcon: const Icon(Icons.search_rounded, size: 18),
               suffixIcon: _query.isEmpty
@@ -1145,7 +1230,7 @@ class _TargetPickerState extends State<_TargetPicker> {
             scrollDirection: Axis.horizontal,
             child: Row(
               children: [
-                for (final group in kTargetGroups)
+                for (final group in groups)
                   Padding(
                     padding: const EdgeInsets.only(right: 7),
                     child: _GroupChip(
@@ -1186,7 +1271,7 @@ class _TargetPickerState extends State<_TargetPicker> {
               TextButton.icon(
                 onPressed: widget.onSelectCommon,
                 icon: const Icon(Icons.auto_awesome_rounded, size: 14),
-                label: const Text('Common'),
+                label: Text(_yoloOnly ? 'All 5' : 'Common'),
                 style: _actionStyle(),
               ),
               TextButton(
@@ -1208,17 +1293,20 @@ class _TargetPickerState extends State<_TargetPicker> {
               ),
               child: Column(
                 children: [
-                  const Text('🔍', style: TextStyle(fontSize: 22)),
+                  const Icon(Icons.search_rounded, size: 24, color: Bg.sub),
                   const SizedBox(height: 4),
                   Text(
-                    'No objects match "$_query".',
+                    searching
+                        ? 'No objects match "$_query".'
+                        : 'No targets are available for this model.',
                     textAlign: TextAlign.center,
                     style: const TextStyle(fontSize: 11.5, color: Bg.sub),
                   ),
-                  TextButton(
-                    onPressed: _clearSearch,
-                    child: const Text('Clear search'),
-                  ),
+                  if (searching)
+                    TextButton(
+                      onPressed: _clearSearch,
+                      child: const Text('Clear search'),
+                    ),
                 ],
               ),
             )
@@ -1228,8 +1316,8 @@ class _TargetPickerState extends State<_TargetPicker> {
               runSpacing: 8,
               children: [
                 for (final target in ordered)
-                  EmojiChip(
-                    emoji: targetEmoji(target),
+                  SelectionChip(
+                    icon: targetIcon(target),
                     label: target,
                     selected: widget.selected.contains(target),
                     color: Bg.mint,
@@ -1243,6 +1331,10 @@ class _TargetPickerState extends State<_TargetPicker> {
             child: Text(
               selectedCount == 0
                   ? 'Pick at least one target to save this alarm.'
+                  : _yoloOnly
+                  ? 'YOLO11n tuned detects microwave, oven, toaster, hair '
+                        'drier, and refrigerator. Switch to SSD for all COCO '
+                        'objects.'
                   : easyCount == 0
                   ? 'Only hard targets selected. They work, but a real alarm '
                         'may take longer.'
@@ -1251,7 +1343,7 @@ class _TargetPickerState extends State<_TargetPicker> {
                         'are the fallback.'
                   : '$selectedCount selected. Easy objects are asked first; '
                         'hard ones are the fallback.',
-              key: ValueKey('copy-$selectedCount-$easyCount'),
+              key: ValueKey('copy-$selectedCount-$easyCount-$_yoloOnly'),
               style: TextStyle(
                 fontSize: 11,
                 height: 1.35,
@@ -1302,7 +1394,11 @@ class _GroupChip extends StatelessWidget {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text(group.emoji, style: const TextStyle(fontSize: 12)),
+              Icon(
+                targetGroupIcon(group.name),
+                size: 14,
+                color: selected ? Colors.white : Bg.sub,
+              ),
               const SizedBox(width: 5),
               Text(
                 group.name,
@@ -1377,19 +1473,19 @@ class _SoundCard extends StatelessWidget {
             children: [
               for (final t in BuiltInTone.values)
                 _SoundChip(
-                  emoji: t.emoji,
+                  icon: toneIcon(t),
                   label: t.title,
                   selected: toneKind == ToneKind.builtin && tone == t,
                   onTap: () => onTone(t),
                 ),
               _SoundChip(
-                emoji: '📂',
+                icon: Icons.folder_open_rounded,
                 label: fileLabel != null ? 'File: $fileLabel' : 'Own file',
                 selected: toneKind == ToneKind.file,
                 onTap: onFile,
               ),
               _SoundChip(
-                emoji: '🎧',
+                icon: Icons.headphones_rounded,
                 label: 'Spotify',
                 selected: toneKind == ToneKind.spotify,
                 onTap: onSpotifySelected,
@@ -1479,7 +1575,7 @@ class _SoundCard extends StatelessWidget {
                         const _SpotifyAccessCard(),
                         const SizedBox(height: 8),
                         Text(
-                          'At ring time Awake opens your link and presses '
+                          'At ring time awake opens your link and presses '
                           'play in Spotify. The twin-chime backup rings '
                           'underneath until the gate is cleared - no siren.',
                           style: TextStyle(
@@ -1507,9 +1603,10 @@ class _SoundCard extends StatelessWidget {
                                   ),
                                   child: Row(
                                     children: [
-                                      const Text(
-                                        '🎧',
-                                        style: TextStyle(fontSize: 14),
+                                      const Icon(
+                                        Icons.headphones_rounded,
+                                        size: 15,
+                                        color: Colors.white,
                                       ),
                                       const SizedBox(width: 8),
                                       const Expanded(
@@ -1540,7 +1637,11 @@ class _SoundCard extends StatelessWidget {
           const SizedBox(height: 14),
           Row(
             children: [
-              const Text('🔈', style: TextStyle(fontSize: 15)),
+              const Icon(
+                Icons.volume_down_rounded,
+                size: 16,
+                color: Colors.white,
+              ),
               Expanded(
                 child: Slider(
                   value: volume,
@@ -1551,7 +1652,11 @@ class _SoundCard extends StatelessWidget {
                   onChanged: onVolume,
                 ),
               ),
-              const Text('🔊', style: TextStyle(fontSize: 15)),
+              const Icon(
+                Icons.volume_up_rounded,
+                size: 16,
+                color: Colors.white,
+              ),
               const SizedBox(width: 8),
               Text(
                 '${(volume * 100).round()}%',
@@ -1636,7 +1741,11 @@ class _WiggleBellState extends State<_WiggleBell>
         angle: math.sin(_c.value * 2 * math.pi) * 0.16,
         child: child,
       ),
-      child: const Text('🔔', style: TextStyle(fontSize: 15)),
+      child: const Icon(
+        Icons.notifications_active_rounded,
+        size: 16,
+        color: Colors.white,
+      ),
     );
   }
 }
@@ -1711,13 +1820,13 @@ class _SoundChip extends StatelessWidget {
     required this.label,
     required this.selected,
     required this.onTap,
-    this.emoji,
+    this.icon,
   });
 
   final String label;
   final bool selected;
   final VoidCallback onTap;
-  final String? emoji;
+  final IconData? icon;
 
   @override
   Widget build(BuildContext context) {
@@ -1742,8 +1851,12 @@ class _SoundChip extends StatelessWidget {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              if (emoji != null) ...[
-                Text(emoji!, style: const TextStyle(fontSize: 14)),
+              if (icon != null) ...[
+                Icon(
+                  icon,
+                  size: 15,
+                  color: selected ? Bg.toneBlueDeep : Colors.white,
+                ),
                 const SizedBox(width: 6),
               ],
               Text(
@@ -1817,7 +1930,7 @@ class _SpotifyAccessCardState extends State<_SpotifyAccessCard>
             const SizedBox(width: 6),
             Expanded(
               child: Text(
-                'Auto-play armed — Awake presses play in Spotify for you at '
+                'Auto-play armed - awake presses play in Spotify for you at '
                 'ring time.',
                 style: TextStyle(
                   fontSize: 10.5,
@@ -1852,7 +1965,7 @@ class _SpotifyAccessCardState extends State<_SpotifyAccessCard>
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  'Allow notification access once, and Awake will press play '
+                  'Allow notification access once, and awake will press play '
                   'inside Spotify by itself — no siren, no manual tap.',
                   style: TextStyle(
                     fontSize: 10.5,
