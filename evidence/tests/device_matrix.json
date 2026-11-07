@@ -1,0 +1,289 @@
+{
+  "host": "AMD Ryzen 5 7535HS, 16 GB RAM, Windows 11, WHPX",
+  "device": "Android 17 (API 37) x86_64 emulator, not physical hardware",
+  "apk": "build\\app\\outputs\\flutter-apk\\app-release.apk",
+  "disclaimer": "Brand-matched display profiles on one emulator. These are not physical phones from each brand; they validate layout, launch, and detector behavior under each resolution and density.",
+  "launches": [
+    {
+      "profile": "samsung-galaxy-s23-ultra",
+      "brand": "Samsung",
+      "model": "Galaxy S23 Ultra",
+      "width": 1440,
+      "height": 3088,
+      "density": 500,
+      "launch_ms": 3921,
+      "activity": "com.example.bangun/.MainActivity",
+      "crash": false,
+      "screenshot": "screenshots\\devices\\samsung-galaxy-s23-ultra.png",
+      "screenshot_metrics": {
+        "width": 1440,
+        "height": 3088,
+        "mean_rgb": [
+          192.97,
+          217.03,
+          246.29
+        ],
+        "stddev_rgb": [
+          79.82,
+          50.56,
+          22.13
+        ],
+        "sampled_colors": 1138,
+        "blank": false
+      }
+    },
+    {
+      "profile": "google-pixel-8-pro",
+      "brand": "Google",
+      "model": "Pixel 8 Pro",
+      "width": 1344,
+      "height": 2992,
+      "density": 480,
+      "launch_ms": 2580,
+      "activity": "com.example.bangun/.MainActivity",
+      "crash": false,
+      "screenshot": "screenshots\\devices\\google-pixel-8-pro.png",
+      "screenshot_metrics": {
+        "width": 1344,
+        "height": 2992,
+        "mean_rgb": [
+          191.64,
+          216.2,
+          246.03
+        ],
+        "stddev_rgb": [
+          80.63,
+          51.11,
+          22.53
+        ],
+        "sampled_colors": 1210,
+        "blank": false
+      }
+    },
+    {
+      "profile": "xiaomi-13-pro",
+      "brand": "Xiaomi",
+      "model": "13 Pro",
+      "width": 1440,
+      "height": 3200,
+      "density": 522,
+      "launch_ms": 2634,
+      "activity": "com.example.bangun/.MainActivity",
+      "crash": false,
+      "screenshot": "screenshots\\devices\\xiaomi-13-pro.png",
+      "screenshot_metrics": {
+        "width": 1440,
+        "height": 3200,
+        "mean_rgb": [
+          193.6,
+          217.36,
+          246.28
+        ],
+        "stddev_rgb": [
+          79.36,
+          50.43,
+          22.58
+        ],
+        "sampled_colors": 1107,
+        "blank": false
+      }
+    },
+    {
+      "profile": "oneplus-11",
+      "brand": "OnePlus",
+      "model": "11",
+      "width": 1440,
+      "height": 3216,
+      "density": 525,
+      "launch_ms": 2637,
+      "activity": "com.example.bangun/.MainActivity",
+      "crash": false,
+      "screenshot": "screenshots\\devices\\oneplus-11.png",
+      "screenshot_metrics": {
+        "width": 1440,
+        "height": 3216,
+        "mean_rgb": [
+          193.53,
+          217.32,
+          246.27
+        ],
+        "stddev_rgb": [
+          79.35,
+          50.44,
+          22.62
+        ],
+        "sampled_colors": 1109,
+        "blank": false
+      }
+    },
+    {
+      "profile": "oppo-find-x6-pro",
+      "brand": "Oppo",
+      "model": "Find X6 Pro",
+      "width": 1440,
+      "height": 3168,
+      "density": 510,
+      "launch_ms": 2723,
+      "activity": "com.example.bangun/.MainActivity",
+      "crash": false,
+      "screenshot": "screenshots\\devices\\oppo-find-x6-pro.png",
+      "screenshot_metrics": {
+        "width": 1440,
+        "height": 3168,
+        "mean_rgb": [
+          192.19,
+          216.54,
+          246.14
+        ],
+        "stddev_rgb": [
+          80.3,
+          50.9,
+          22.42
+        ],
+        "sampled_colors": 1188,
+        "blank": false
+      }
+    },
+    {
+      "profile": "vivo-x90-pro",
+      "brand": "Vivo",
+      "model": "X90 Pro",
+      "width": 1260,
+      "height": 2800,
+      "density": 453,
+      "launch_ms": 2904,
+      "activity": "com.example.bangun/.MainActivity",
+      "crash": false,
+      "screenshot": "screenshots\\devices\\vivo-x90-pro.png",
+      "screenshot_metrics": {
+        "width": 1260,
+        "height": 2800,
+        "mean_rgb": [
+          192.74,
+          216.86,
+          246.19
+        ],
+        "stddev_rgb": [
+          79.92,
+          50.7,
+          22.46
+        ],
+        "sampled_colors": 1178,
+        "blank": false
+      }
+    },
+    {
+      "profile": "huawei-p60-pro",
+      "brand": "Huawei",
+      "model": "P60 Pro",
+      "width": 1220,
+      "height": 2700,
+      "density": 444,
+      "launch_ms": 2451,
+      "activity": "com.example.bangun/.MainActivity",
+      "crash": false,
+      "screenshot": "screenshots\\devices\\huawei-p60-pro.png",
+      "screenshot_metrics": {
+        "width": 1220,
+        "height": 2700,
+        "mean_rgb": [
+          193.26,
+          217.16,
+          246.24
+        ],
+        "stddev_rgb": [
+          79.49,
+          50.47,
+          22.48
+        ],
+        "sampled_colors": 1123,
+        "blank": false
+      }
+    },
+    {
+      "profile": "motorola-edge-40-pro",
+      "brand": "Motorola",
+      "model": "Edge 40 Pro",
+      "width": 1080,
+      "height": 2400,
+      "density": 402,
+      "launch_ms": 2153,
+      "activity": "com.example.bangun/.MainActivity",
+      "crash": false,
+      "screenshot": "screenshots\\devices\\motorola-edge-40-pro.png",
+      "screenshot_metrics": {
+        "width": 1080,
+        "height": 2400,
+        "mean_rgb": [
+          192.4,
+          216.6,
+          246.01
+        ],
+        "stddev_rgb": [
+          80.08,
+          50.9,
+          22.87
+        ],
+        "sampled_colors": 1140,
+        "blank": false
+      }
+    },
+    {
+      "profile": "sony-xperia-1-v",
+      "brand": "Sony",
+      "model": "Xperia 1 V",
+      "width": 1644,
+      "height": 3840,
+      "density": 643,
+      "launch_ms": 3157,
+      "activity": "com.example.bangun/.MainActivity",
+      "crash": false,
+      "screenshot": "screenshots\\devices\\sony-xperia-1-v.png",
+      "screenshot_metrics": {
+        "width": 1644,
+        "height": 3840,
+        "mean_rgb": [
+          192.13,
+          216.38,
+          245.86
+        ],
+        "stddev_rgb": [
+          80.25,
+          51.2,
+          23.49
+        ],
+        "sampled_colors": 1161,
+        "blank": false
+      }
+    },
+    {
+      "profile": "asus-rog-phone-7",
+      "brand": "Asus",
+      "model": "ROG Phone 7",
+      "width": 1656,
+      "height": 2340,
+      "density": 391,
+      "launch_ms": 2862,
+      "activity": "com.example.bangun/.MainActivity",
+      "crash": false,
+      "screenshot": "screenshots\\devices\\asus-rog-phone-7.png",
+      "screenshot_metrics": {
+        "width": 1656,
+        "height": 2340,
+        "mean_rgb": [
+          194.17,
+          217.95,
+          246.86
+        ],
+        "stddev_rgb": [
+          79.79,
+          50.03,
+          20.31
+        ],
+        "sampled_colors": 958,
+        "blank": false
+      }
+    }
+  ],
+  "predictions": []
+}

@@ -33,6 +33,10 @@ class ScanChallengeScreen extends StatefulWidget {
 
 class _ScanChallengeScreenState extends State<ScanChallengeScreen>
     with WidgetsBindingObserver {
+  /// Deliberate frame throttle: ~9 fps (110 ms) to balance responsiveness and battery.
+  /// Canonical config cited by README and manuscript as `maxFps` / `frameThrottleMs`.
+  static const int maxFps = 9;
+  static const int frameThrottleMs = 110; // 1000/9 ~= 111 ms; 110 ms ~= 9.1 fps
   static const _holdMs = 3000;
 
   CameraController? _controller;
@@ -292,7 +296,7 @@ class _ScanChallengeScreenState extends State<ScanChallengeScreen>
   void _onFrame(CameraImage image) {
     if (!mounted || _finishing || _busy) return;
     final now = DateTime.now();
-    if (now.difference(_lastFrameAt).inMilliseconds < 110) return;
+    if (now.difference(_lastFrameAt).inMilliseconds < frameThrottleMs) return;
     _lastFrameAt = now;
     _busy = true;
 
@@ -361,6 +365,10 @@ class _ScanChallengeScreenState extends State<ScanChallengeScreen>
   void _applySession(bool matched, String? label, double score, int dtMs) {
     if (matched) {
       _matchedLabel = label;
+      // NOTE: because accepted detections always have score >= CocoDetector.minScore (0.60),
+      // math.min(1.0, 0.4 + score) == 1.0 always. The hold meter is therefore effectively a
+      // flat 3 s cumulative hold, NOT a confidence-weighted bonus. Kept as-is for code/paper
+      // parity (paper states this explicitly). Do not "fix" the formula without updating paper.
       _progress = math.min(
         1.0,
         _progress + (dtMs / _holdMs) * math.min(1.0, 0.4 + score),

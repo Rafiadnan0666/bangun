@@ -1,7 +1,7 @@
 name: awake
 description: "Awake: alarms you stop with a scan or a math grind. All ML runs on-device."
 publish_to: 'none'
-version: 1.0.2+3
+version: 1.1.0+4
 
 environment:
   sdk: ^3.13.5

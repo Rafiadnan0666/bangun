@@ -1,8 +1,8 @@
 # awake - Non-Dismissable Alarm with On-Device ML Gate
 
-**Version:** 1.0.2+3  
+**Version:** 1.1.0+4  
 **Built:** Flutter 3.47.6 / Dart 3.13.5  
-**Status:** Release build with two selectable on-device detectors, 69 unit tests, and an Android on-device model test.
+**Status:** Release build with two selectable on-device detectors, 78 unit tests, and an Android on-device model test.
 
 ---
 
@@ -17,7 +17,7 @@ Two detectors are selectable on the home screen:
 
 The YOLO model is limited to microwave, oven, toaster, hair drier, and refrigerator. When it is selected, the editor and scan screen only offer those targets.
 
-**Package:** `com.example.bangun`  
+**Package:** `id.ac.bsi.awake`  
 **App label:** `awake`  
 **Installable release:** `dist/app-release-awake.apk`
 
@@ -173,7 +173,7 @@ python tools\report_device_matrix.py
 ## TESTING verification
 
 - `flutter analyze` reports zero issues.
-- `flutter test` runs 69 tests across math, scan targets, geometry, detector postprocessing, alarm models, and Spotify link validation.
+- `flutter test` runs 78 tests across math, scan targets, geometry, detector postprocessing, alarm models, and Spotify link validation.
 - The Android integration test passes both models on `emulator-5554`.
 - The release APK is installed and launched at multiple resolutions without a crash.
 

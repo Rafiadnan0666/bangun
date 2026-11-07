@@ -5,7 +5,7 @@ plugins {
 }
 
 android {
-    namespace = "com.example.bangun"
+    namespace = "id.ac.bsi.awake"
     // flutter_plugin_android_lifecycle 2.0.30+ (pulled in by file_picker)
     // demands compileSdk >= 36; pin explicitly instead of flutter's preset.
     compileSdk = 36
@@ -17,7 +17,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.example.bangun"
+        applicationId = "id.ac.bsi.awake"
         minSdk = 24 // Required for TensorFlow Lite
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
@@ -25,11 +25,34 @@ android {
         multiDexEnabled = true
     }
 
+    // Release signing: read from android/keystore.properties (git-ignored).
+    // Copy android/keystore.properties.example -> android/keystore.properties
+    // and fill in the keystore path + passwords. CI supplies these via secrets.
+    val keystorePropertiesFile = rootProject.file("keystore.properties")
+    val keystoreProperties = java.util.Properties()
+    if (keystorePropertiesFile.exists()) {
+        keystoreProperties.load(keystorePropertiesFile.inputStream())
+    }
+    signingConfigs {
+        create("release") {
+            if (keystorePropertiesFile.exists()) {
+                storeFile = file(keystoreProperties["storeFile"] as String)
+                storePassword = keystoreProperties["storePassword"] as String
+                keyAlias = keystoreProperties["keyAlias"] as String
+                keyPassword = keystoreProperties["keyPassword"] as String
+            }
+        }
+    }
+
     buildTypes {
         release {
-            // Signed with the debug keys so `flutter run --release` works
-            // without extra setup.
-            signingConfig = signingConfigs.getByName("debug")
+            // Release builds use the documented release keystore when present,
+            // otherwise fall back to debug signing for local dev (never for store).
+            signingConfig = if (keystorePropertiesFile.exists()) {
+                signingConfigs.getByName("release")
+            } else {
+                signingConfigs.getByName("debug")
+            }
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",

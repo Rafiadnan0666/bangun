@@ -1,0 +1,8 @@
+metric,value,n,scale,source
+SUS_mean,78.5,10,0-100,paper Table 8 (user-reported aggregate)
+ease_of_use,4.2,10,1-5,paper Table 8
+instruction_clarity,4.5,10,1-5,paper Table 8
+user_satisfaction,4.3,10,1-5,paper Table 8
+# NPS omitted: with n=10 the result must be a multiple of 10; raw category
+# counts (promoter/passive/detractor) were not available. See paper Table 8 note.
+# Raw anonymized response sheet is MISSING.

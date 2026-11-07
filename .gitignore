@@ -50,5 +50,10 @@ app.*.map.json
 # Research manuscripts stay off the repo (user request)
 /paper/
 
+# Release keystore (never commit)
+/android/keystore.properties
+/android/*.keystore
+/android/*.jks
+
 # COCO images and annotations stay local (about 780 MB)
 /ml/data/

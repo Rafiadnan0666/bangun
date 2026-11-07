@@ -1,0 +1,7 @@
+condition,n,detected,fp,hold_solved,detection_rate,fp_rate,hold_acc,source
+bright,10,10,0,9,1.00,0.00,0.90,paper Table 6 (counts stated in manuscript: 9/10 hold)
+dim,10,8,2,6,0.80,0.20,0.60,paper Table 6
+dark,10,5,3,2,0.50,0.30,0.20,paper Table 6 (Wilson 95% CI 0.24-0.76)
+# Raw per-trial sheets (lighting, object placement, timestamps) are MISSING.
+# Only aggregate counts were recorded in the author's handwritten trial notes.
+# TODO(author): commit scanned trial sheets to evidence/detection/raw/

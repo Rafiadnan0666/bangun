@@ -1,0 +1,89 @@
+{
+  "dataset": "C:\\Users\\BRAVO\\Downlo\\hh\\awake\\dataset\\coco_real\\val",
+  "models": [
+    {
+      "model": "SSD MobileNet v1",
+      "images": 202,
+      "instances": 344,
+      "mAP_50": 0.15524122190227876,
+      "per_class_AP_50": {
+        "microwave": 0.19352497096399535,
+        "oven": 0.27104096039033826,
+        "toaster": 0.0,
+        "hair drier": 0.0,
+        "refrigerator": 0.3116401781570602
+      },
+      "gate_recall": {
+        "0.4": {
+          "recall": 0.33430232558139533,
+          "hits": 115,
+          "ground_truth": 344
+        },
+        "0.45": {
+          "recall": 0.30523255813953487,
+          "hits": 105,
+          "ground_truth": 344
+        },
+        "0.5": {
+          "recall": 0.29069767441860467,
+          "hits": 100,
+          "ground_truth": 344
+        },
+        "0.6": {
+          "recall": 0.2063953488372093,
+          "hits": 71,
+          "ground_truth": 344
+        },
+        "0.7": {
+          "recall": 0.09011627906976744,
+          "hits": 31,
+          "ground_truth": 344
+        }
+      },
+      "latency_mean_ms": 25.441207920797897,
+      "latency_p95_ms": 30.262240000047314
+    },
+    {
+      "model": "YOLO11n tuned (5 appliance classes)",
+      "images": 202,
+      "instances": 344,
+      "mAP_50": 0.2073371571887756,
+      "per_class_AP_50": {
+        "microwave": 0.19923901531183952,
+        "oven": 0.2893768487607704,
+        "toaster": 0.18151815181518147,
+        "hair drier": 0.03285328532853286,
+        "refrigerator": 0.33369848472755376
+      },
+      "gate_recall": {
+        "0.4": {
+          "recall": 0.3226744186046512,
+          "hits": 111,
+          "ground_truth": 344
+        },
+        "0.45": {
+          "recall": 0.313953488372093,
+          "hits": 108,
+          "ground_truth": 344
+        },
+        "0.5": {
+          "recall": 0.3081395348837209,
+          "hits": 106,
+          "ground_truth": 344
+        },
+        "0.6": {
+          "recall": 0.2877906976744186,
+          "hits": 99,
+          "ground_truth": 344
+        },
+        "0.7": {
+          "recall": 0.25872093023255816,
+          "hits": 89,
+          "ground_truth": 344
+        }
+      },
+      "latency_mean_ms": 63.487618316784314,
+      "latency_p95_ms": 78.93990500060681
+    }
+  ]
+}

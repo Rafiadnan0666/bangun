@@ -1,0 +1,9 @@
+object,n,detected,fp,detection_rate,fp_rate,source,corrected
+cup,10,9,1,0.90,0.10,paper Table 7 (raw 90/10),no
+bottle,10,9,1,0.90,0.10,paper Table 7 (raw printed 95/5; impossible from n=10),yes
+chair,10,9,1,0.90,0.10,paper Table 7 (raw 90/10),no
+person,10,10,0,1.00,0.00,paper Table 7 (raw 100/0),no
+cell phone,10,9,1,0.90,0.10,paper Table 7 (raw printed 95/5; impossible from n=10),yes
+tv,10,9,1,0.90,0.10,paper Table 7 (raw printed 95/5; impossible from n=10),yes
+# Raw per-trial sheets are MISSING. Corrected values assume 9/10 and 1/10,
+# consistent with the cup/chair rows. Author must verify against handwritten notes.
