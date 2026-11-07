@@ -43,8 +43,7 @@ void main() {
     });
 
     test('todayKey returns correct date string', () {
-      expect(todayKey(), DateTime.now().year.toString() +
-          '-${two(DateTime.now().month)}-${two(DateTime.now().day)}');
+      expect(todayKey(), '${DateTime.now().year}-${two(DateTime.now().month)}-${two(DateTime.now().day)}');
     });
   });
 
