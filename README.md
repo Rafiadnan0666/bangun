@@ -1,5 +1,7 @@
 # awake - Non-Dismissable Alarm with On-Device ML Gate
 
+⚠️ **Canonical evidence for the paper is tag `v1.1.0-paper`**; commits before 2026-11-07 are a stale snapshot.
+
 **Version:** 1.1.0+4  
 **Built:** Flutter 3.47.6 / Dart 3.13.5  
 **Status:** Release build with two selectable on-device detectors, 78 unit tests, and an Android on-device model test.
@@ -19,7 +21,10 @@ The YOLO model is limited to microwave, oven, toaster, hair drier, and refrigera
 
 **Package:** `id.ac.bsi.awake`  
 **App label:** `awake`  
-**Installable release:** `dist/app-release-awake.apk`
+**Installable release:** `dist/app-release-awake.apk`  
+**Tests:** 78 pass  
+**Coverage:** `coverage/lcov.info`  
+**Tag:** `v1.1.0-paper`
 
 ---
 
@@ -216,7 +221,8 @@ The fixture images are not part of the shipped app. Add them to
 ## PACKAGE AND VERSION
 
 - Source version: `1.0.2+3`
-- Package id: `com.example.bangun`
+- Package id: `id.ac.bsi.awake`
+- Tag: `v1.1.0-paper` (canonical state for paper reproducibility)
 - App label: `awake`
 - Installable APK: `dist/app-release-awake.apk`
 - Model evaluation: `tools/results/detector_eval.json`
