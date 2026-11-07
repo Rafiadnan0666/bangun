@@ -2,9 +2,52 @@ import 'dart:io';
 import 'dart:ui';
 
 import 'package:awake/data/coco_detector.dart';
+import 'package:awake/core/format.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  group('format helpers', () {
+    test('two pads with leading zero', () {
+      expect(two(5), '05');
+      expect(two(12), '12');
+      expect(two(0), '00');
+    });
+
+    test('hhmm formats 24h label', () {
+      expect(hhmm(6, 30), '06:30');
+      expect(hhmm(0, 0), '00:00');
+      expect(hhmm(23, 59), '23:59');
+    });
+
+    test('repeatLabel returns correct strings', () {
+      expect(repeatLabel(daily: true, days: const [1, 2, 3]), 'Mon Tue Wed');
+      expect(repeatLabel(daily: false, days: const [1, 2, 3]), 'Mon Tue Wed');
+      expect(repeatLabel(daily: true, days: []), 'Once');
+      expect(repeatLabel(daily: false, days: []), 'Once');
+      expect(repeatLabel(daily: true, days: [1, 2, 3, 4, 5, 6, 7]), 'Every day');
+    });
+
+    test('countdownText returns expected strings', () {
+      expect(countdownText(null), 'not scheduled');
+      expect(countdownText(DateTime.now().subtract(const Duration(hours: 1))), 'ringing');
+      // Cover the 'in X min' branch (h == 0)
+      final nearFuture = DateTime.now().add(const Duration(minutes: 10));
+      final nearResult = countdownText(nearFuture);
+      expect(nearResult, isNot('not scheduled'));
+      expect(nearResult, isNot('ringing'));
+      expect(nearResult, contains('min'));
+      // Cover the 'in X h Y min' branch (h > 0)
+      final farFuture = DateTime.now().add(const Duration(hours: 2));
+      final farResult = countdownText(farFuture);
+      expect(farResult, contains('h'));
+    });
+
+    test('todayKey returns correct date string', () {
+      expect(todayKey(), DateTime.now().year.toString() +
+          '-${two(DateTime.now().month)}-${two(DateTime.now().day)}');
+    });
+  });
+
   group('detection presentation', () {
     test('placeholder labels are filtered out', () {
       expect(CocoDetector.isUsableLabel('???'), isFalse);
@@ -125,6 +168,26 @@ void main() {
       expect(second, hasLength(24));
       expect(identical(first, second), isFalse);
       expect(identical(buffer.ensure(24), second), isTrue);
+    });
+  });
+
+  group('CocoDetector state', () {
+    test('isReady is false when not loaded', () {
+      expect(CocoDetector.I.isReady, isFalse);
+    });
+
+    test('inputSize defaults to 300', () {
+      expect(CocoDetector.I.inputSize, 300);
+    });
+
+    test('loadError is null when nothing failed', () {
+      expect(CocoDetector.I.loadError, isNull);
+    });
+
+    test('dispose clears state', () {
+      expect(() => CocoDetector.I.dispose(), returnsNormally);
+      expect(CocoDetector.I.isReady, isFalse);
+      // inputSize is not reset by dispose, so it remains the last known value
     });
   });
 }
